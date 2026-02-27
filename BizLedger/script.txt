@@ -1,9 +1,0 @@
-ALTER TABLE user_organizations DROP CONSTRAINT IF EXISTS user_organizations_organization_id_fkey;
-
-DROP TABLE IF EXISTS organization_modules;
-
-ALTER TABLE user_organizations
-  ADD CONSTRAINT user_organizations_organisation_id_fkey
-  FOREIGN KEY (organization_id) REFERENCES organisations(id);
-
-DROP TABLE IF EXISTS organizations;

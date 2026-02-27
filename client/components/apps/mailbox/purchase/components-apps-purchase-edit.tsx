@@ -484,7 +484,6 @@ const ComponentsAppsPurchaseEdit = () => {
                 </div>
 
                 <div className="border-t border-white-light px-4 py-3 dark:border-[#1b2e4b]"></div>
-            </div>
 
             <div className="mt-6 flex flex-wrap gap-3 print:hidden">
                 <button type="button" className="btn btn-primary gap-2" onClick={() => addItem()}>

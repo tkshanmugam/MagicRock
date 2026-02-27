@@ -26,7 +26,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def truncate_password_to_72_bytes(password: str) -> str:
     """Truncate password to exactly 72 bytes or less for bcrypt compatibility.
-    
     This function ensures the password, when encoded to UTF-8, is <= 72 bytes.
     It handles UTF-8 encoding safely to avoid cutting multi-byte characters incorrectly.
     """

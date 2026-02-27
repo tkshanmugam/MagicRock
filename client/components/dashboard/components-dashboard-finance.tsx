@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import ReactApexChart from 'react-apexcharts';
+import dynamic from 'next/dynamic';
+
+const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
 import { apiGet } from '@/lib/apiClient';
 import { organizationContext } from '@/lib/organizationContext';
 
@@ -114,12 +116,12 @@ const ComponentsDashboardFinance = () => {
     const lineChartOptions = useMemo(
         () => ({
             chart: {
-                type: 'line',
+                type: 'line' as const,
                 height: 320,
                 toolbar: { show: false },
             },
             stroke: {
-                curve: 'smooth',
+                curve: 'smooth' as const,
                 width: 3,
             },
             dataLabels: { enabled: false },
@@ -133,7 +135,7 @@ const ComponentsDashboardFinance = () => {
     const barChartOptions = useMemo(
         () => ({
             chart: {
-                type: 'bar',
+                type: 'bar' as const,
                 height: 320,
                 toolbar: { show: false },
             },
