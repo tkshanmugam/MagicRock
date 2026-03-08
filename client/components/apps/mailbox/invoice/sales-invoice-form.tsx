@@ -538,7 +538,7 @@ const SalesInvoiceForm = ({ mode, invoiceId }: Props) => {
                         <div className="font-semibold text-gray-600">Vehicle No</div>
                         <input className={`${inputBorderClass} h-8 text-sm`} value={vehicleNo} onChange={(e) => setVehicleNo(e.target.value)} />
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 hidden">
                         <div className="font-semibold text-gray-600">Transport Name</div>
                         <input className={`${inputBorderClass} h-8 text-sm`} value={transportName} onChange={(e) => setTransportName(e.target.value)} />
                     </div>

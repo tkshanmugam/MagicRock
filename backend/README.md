@@ -236,3 +236,7 @@ backend/
 
 Proprietary - BizLeader Project
 
+## Initial User Role
+UPDATE users
+SET role = 'SUPER_ADMIN'
+WHERE username = 'admin' AND (role IS NULL OR role != 'SUPER_ADMIN');

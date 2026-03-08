@@ -2,11 +2,12 @@
 import IconEdit from '@/components/icon/icon-edit';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
-import IconTrashLines from '@/components/icon/icon-trash-lines';
+import IconXCircle from '@/components/icon/icon-x-circle';
 import type { DataTableColumn, DataTableProps, DataTableSortStatus } from 'mantine-datatable';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import React, { useCallback, useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
@@ -174,14 +175,35 @@ const ComponentsAppsInvoiceList = () => {
     }, [pageSize, statusFilter, invoiceTypeFilter, startDate, endDate, organisationId]);
 
     const handleCancel = async (invoiceId: number) => {
-        if (!window.confirm('Are you sure you want to cancel this invoice?')) {
+        const result = await Swal.fire({
+            icon: 'warning',
+            title: 'Cancel Invoice',
+            text: 'Are you sure you want to cancel this invoice? This action cannot be undone.',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, cancel it',
+            cancelButtonText: 'No, keep it',
+            confirmButtonColor: '#d33',
+        });
+        if (!result.isConfirmed) {
             return;
         }
         try {
             await cancelSalesInvoice(invoiceId);
+            void Swal.fire({
+                icon: 'success',
+                title: 'Cancelled',
+                text: 'Invoice has been cancelled successfully.',
+                timer: 2000,
+                showConfirmButton: false,
+            });
             fetchInvoices();
         } catch (error) {
             console.error('Failed to cancel invoice', error);
+            void Swal.fire({
+                icon: 'error',
+                title: 'Cancel Failed',
+                text: error instanceof Error ? error.message : 'Failed to cancel invoice. Please try again.',
+            });
         }
     };
 
@@ -241,8 +263,8 @@ const ComponentsAppsInvoiceList = () => {
                         <IconEye />
                     </Link>
                     {canDeleteSales && status !== 'CANCELLED' && (
-                        <button type="button" className="flex hover:text-danger" onClick={() => handleCancel(id)}>
-                            <IconTrashLines />
+                        <button type="button" className="flex hover:text-danger" onClick={() => handleCancel(id)} title="Cancel invoice">
+                            <IconXCircle />
                         </button>
                     )}
                 </div>

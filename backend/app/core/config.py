@@ -56,8 +56,8 @@ class Settings(BaseSettings):
     LOG_DIR: str = "logs"
     LOG_RETENTION_DAYS: int = 5
     
-    # CORS (can be JSON string or comma-separated)
-    CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:3001"]'
+    # CORS (can be JSON string or comma-separated) - include all client origins
+    CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:3001","http://187.77.188.73:3000"]'
 
     # File Uploads
     UPLOADS_DIR: str = "uploads"

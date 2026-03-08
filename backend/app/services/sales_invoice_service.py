@@ -329,5 +329,6 @@ async def cancel_sales_invoice(db: AsyncSession, invoice_id: int, user_id: int) 
         return invoice
     invoice.status = "CANCELLED"
     invoice.modified_by = user_id
+    await db.flush()
     await db.refresh(invoice)
     return invoice

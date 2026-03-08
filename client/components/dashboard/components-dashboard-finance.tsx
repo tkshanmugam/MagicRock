@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 
 const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
 import { apiGet } from '@/lib/apiClient';
+import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 
 type RangeMode = 'today' | 'month';
@@ -50,16 +51,106 @@ const ComponentsDashboardFinance = () => {
     const [taxSummary, setTaxSummary] = useState<DashboardTaxSummary | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [organisationsList, setOrganisationsList] = useState<any[]>([]);
+    const [orgsLoading, setOrgsLoading] = useState(false);
+    const [organisationId, setOrganisationId] = useState<string>('');
 
     const canView = organizationContext.hasPermission('DASHBOARD', 'view');
     const isSuperAdmin = organizationContext.getIsSuperAdmin();
-    const selectedOrgId = organizationContext.getSelectedOrganizationId();
+    const selectedOrgId = organisationId ? Number(organisationId) : organizationContext.getSelectedOrganizationId();
 
     const buildQuery = useCallback(() => {
         const params = new URLSearchParams();
         params.set('range', range);
         return params.toString();
     }, [range]);
+
+    const fetchOrganisations = useCallback(async () => {
+        if (!authState.isAuthStateReady()) {
+            return;
+        }
+        try {
+            setOrgsLoading(true);
+            const endpoint = organizationContext.getIsSuperAdmin() ? 'organisations' : 'organisations/me';
+            const response = await apiGet<any>(endpoint);
+            const organisations = Array.isArray(response) ? response : response.data || response.results || [];
+            setOrganisationsList(organisations);
+        } catch (error) {
+            console.error('Failed to fetch organisations', error);
+        } finally {
+            setOrgsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        organizationContext.updateIsSuperAdminFromToken();
+    }, []);
+
+    useEffect(() => {
+        if (authState.isAuthStateReady()) {
+            fetchOrganisations();
+            return;
+        }
+        let attempts = 0;
+        const maxAttempts = 20;
+        const interval = setInterval(() => {
+            attempts++;
+            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
+                clearInterval(interval);
+                if (authState.isAuthStateReady()) {
+                    organizationContext.updateIsSuperAdminFromToken();
+                    fetchOrganisations();
+                }
+            }
+        }, 100);
+        return () => clearInterval(interval);
+    }, [fetchOrganisations]);
+
+    const updateOrganisationSelection = useCallback(
+        async (nextOrganisationId: string) => {
+            const parsedId = Number(nextOrganisationId);
+            if (!parsedId || Number.isNaN(parsedId)) {
+                return;
+            }
+            organizationContext.setSelectedOrganizationId(parsedId);
+            if (isSuperAdmin) {
+                return;
+            }
+            try {
+                const permissionsResponse = await apiGet<any>(`organisations/${parsedId}/permissions/me`);
+                const permissionsPayload =
+                    permissionsResponse?.modules ||
+                    permissionsResponse?.data?.modules ||
+                    permissionsResponse?.results?.modules ||
+                    (Array.isArray(permissionsResponse) ? permissionsResponse : []);
+                organizationContext.setPermissions(permissionsPayload || []);
+            } catch (error) {
+                // Keep existing permissions if the update fails.
+            }
+        },
+        [isSuperAdmin]
+    );
+
+    useEffect(() => {
+        if (!organisationsList.length) {
+            return;
+        }
+        const storedId = organizationContext.getSelectedOrganizationId();
+        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
+        if (storedMatch && !organisationId) {
+            setOrganisationId(String(storedMatch.id));
+            return;
+        }
+        if (!organisationId) {
+            setOrganisationId(String(organisationsList[0].id));
+        }
+    }, [organisationsList, organisationId]);
+
+    useEffect(() => {
+        if (organisationId) {
+            updateOrganisationSelection(organisationId);
+        }
+    }, [organisationId, updateOrganisationSelection]);
 
     const loadDashboard = useCallback(async () => {
         if (!canView) {
@@ -172,7 +263,27 @@ const ComponentsDashboardFinance = () => {
                     <h2 className="text-lg font-semibold">Dashboard</h2>
                     <p className="text-sm text-white-dark">Real-time metrics scoped to your organization.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-3">
+                    {organisationsList.length > 1 ? (
+                        <select
+                            id="dashboardOrganisationId"
+                            className="form-select w-full sm:w-64"
+                            value={organisationId}
+                            onChange={(e) => setOrganisationId(e.target.value)}
+                        >
+                            <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
+                            {organisationsList.map((org: any) => (
+                                <option key={org.id} value={org.id}>
+                                    {org.name}
+                                </option>
+                            ))}
+                        </select>
+                    ) : organisationsList.length === 1 ? (
+                        <div className="text-sm font-medium text-white-dark">
+                            {organisationsList[0]?.name || 'Organisation'}
+                        </div>
+                    ) : null}
+                    <div className="flex gap-2">
                     <button
                         className={`btn ${range === 'today' ? 'btn-primary' : 'btn-outline-primary'}`}
                         onClick={() => setRange('today')}
@@ -187,6 +298,7 @@ const ComponentsDashboardFinance = () => {
                     >
                         This Month
                     </button>
+                    </div>
                 </div>
             </div>
 

@@ -13,6 +13,7 @@ import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { useSearchParams } from 'next/navigation';
+import { numberToWords } from '@/lib/numberToWords';
 import { fetchSalesInvoice, SalesInvoice } from '@/lib/salesInvoiceApi';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
@@ -432,7 +433,7 @@ const ComponentsAppsInvoicePreview = ({ actionVariant = 'full' }: { actionVarian
                                             <div className="gst-label gst-label-wrap">E-Way Bill No.</div>
                                             <div className="gst-value">{invoiceMeta.ewayBillNo || '-'}</div>
                                         </div>
-                                        <div className="gst-info-row gst-info-row-right">
+                                        <div className="gst-info-row gst-info-row-right hidden">
                                             <div className="gst-label gst-label-wrap">Transport</div>
                                             <div className="gst-value">{invoiceMeta.transport || '-'}</div>
                                         </div>
@@ -553,7 +554,7 @@ const ComponentsAppsInvoicePreview = ({ actionVariant = 'full' }: { actionVarian
                         <div className="mt-4 grid grid-cols-[2fr_1fr] gap-0 border border-black text-[10px] gst-no-break">
                             <div className="border-r border-black">
                                 <div className="gst-section-title border-b border-black py-1 text-center font-semibold">Total in words</div>
-                                <div className="p-2 text-sm leading-[1.35] print:text-[10px]">{invoice.invoice_value_words || '-'}</div>
+                                <div className="p-2 text-sm leading-[1.35] print:text-[10px]">{numberToWords(Number(invoice.invoice_total || 0))}</div>
                             </div>
                             <div>
                                 <div className="divide-y divide-black gst-totals">

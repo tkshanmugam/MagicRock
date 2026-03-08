@@ -27,19 +27,25 @@ def _convert_hundreds(value: int) -> str:
 
 
 def _convert_number(value: int) -> str:
+    """Convert number to words using Indian numbering system (Lakh, Crore)."""
     if value == 0:
         return _ONES[0]
 
     parts = []
-    billions = value // 1_000_000_000
-    millions = (value // 1_000_000) % 1000
-    thousands = (value // 1_000) % 1000
+    # Indian system: ... Crore, Lakh, Thousand, (last 3 digits)
+    # 1,00,00,000 = 1 Crore, 1,00,000 = 1 Lakh, 1,000 = 1 Thousand
     remainder = value % 1000
+    thousands = (value // 1_000) % 100
+    lakhs = (value // 100_000) % 100
+    crores = (value // 10_000_000) % 100
+    arabs = (value // 1_000_000_000) % 100
 
-    if billions:
-        parts.append(f"{_convert_hundreds(billions)} Billion")
-    if millions:
-        parts.append(f"{_convert_hundreds(millions)} Million")
+    if arabs:
+        parts.append(f"{_convert_hundreds(arabs)} Arab")
+    if crores:
+        parts.append(f"{_convert_hundreds(crores)} Crore")
+    if lakhs:
+        parts.append(f"{_convert_hundreds(lakhs)} Lakh")
     if thousands:
         parts.append(f"{_convert_hundreds(thousands)} Thousand")
     if remainder:
