@@ -67,6 +67,17 @@ const getDefaultParticularsAndRateForOrganisation = (
     return null;
 };
 
+type PurchaseItemRow = {
+    id: number;
+    particulars: string;
+    bags: string | number;
+    qtls: string | number;
+    kgs: string | number;
+    rateRs: string | number;
+    amountRs: string | number;
+    [key: string]: string | number;
+};
+
 const ComponentsAppsPurchaseAdd = () => {
     const canCreatePurchase = organizationContext.hasPermission('Purchase', 'create');
     const [isSuperAdmin, setIsSuperAdmin] = useState(organizationContext.getIsSuperAdmin());
@@ -95,7 +106,7 @@ const ComponentsAppsPurchaseAdd = () => {
         }
         return String(value).padStart(4, '0');
     };
-    const [items, setItems] = useState<any>([
+    const [items, setItems] = useState<PurchaseItemRow[]>([
         {
             id: 1,
             particulars: '',
