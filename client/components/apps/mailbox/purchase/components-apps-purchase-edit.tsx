@@ -52,6 +52,7 @@ const ComponentsAppsPurchaseEdit = () => {
     }, []);
     const [items, setItems] = useState<any>([]);
     const [customerDirectory, setCustomerDirectory] = useState<CustomerRecord[]>([]);
+    const [isCancelled, setIsCancelled] = useState<boolean>(false);
 
     const addItem = () => {
         let maxId = 0;
@@ -182,12 +183,15 @@ const ComponentsAppsPurchaseEdit = () => {
         }
         const storedId = organizationContext.getSelectedOrganizationId();
         const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        if (storedMatch && !organisationId) {
-            setOrganisationId(String(storedMatch.id));
+        const currentMatch = organisationId ? organisationsList.find((org: any) => String(org.id) === String(organisationId)) : null;
+        if (currentMatch) {
             return;
         }
         if (!organisationId) {
-            setOrganisationId(String(organisationsList[0].id));
+            const fallback = storedMatch || organisationsList[0];
+            if (fallback) {
+                setOrganisationId(String(fallback.id));
+            }
         }
     }, [organisationsList, organisationId]);
 
@@ -198,6 +202,7 @@ const ComponentsAppsPurchaseEdit = () => {
         const loadVoucher = async () => {
             try {
                 const voucher = await apiGet<any>(`purchase-vouchers/${voucherId}`);
+                setIsCancelled(voucher.status === 'cancelled');
                 setVoucherNo(String(voucher.voucher_no ?? ''));
                 setVoucherDate(voucher.voucher_date || '');
                 setSupplierName(voucher.supplier_name || '');
@@ -256,7 +261,7 @@ const ComponentsAppsPurchaseEdit = () => {
                     amount: Number(item.amountRs || 0),
                 })),
             });
-            window.alert('Purchase voucher updated.');
+            window.alert('Purchase voucher saved.');
         } catch (error: any) {
             window.alert(error?.message || 'Failed to update purchase voucher.');
         } finally {
@@ -268,6 +273,16 @@ const ComponentsAppsPurchaseEdit = () => {
         return (
             <div className="panel border-white-light px-5 py-8 text-center font-semibold dark:border-[#1b2e4b]">
                 You do not have permission to update Purchase.
+            </div>
+        );
+    }
+
+    if (isCancelled) {
+        return (
+            <div className="panel border-white-light px-5 py-8 dark:border-[#1b2e4b]">
+                <div className="rounded border border-danger/30 bg-danger/10 px-4 py-3 text-center font-semibold text-danger">
+                    This purchase voucher has been cancelled and cannot be edited.
+                </div>
             </div>
         );
     }

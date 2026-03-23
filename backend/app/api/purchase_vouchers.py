@@ -15,7 +15,7 @@ from app.services.purchase_voucher_service import (
     get_purchase_voucher,
     get_next_voucher_number,
     update_purchase_voucher,
-    delete_purchase_voucher,
+    cancel_purchase_voucher,
 )
 from app.services.audit_service import AuditLogService
 
@@ -52,11 +52,14 @@ async def list_vouchers(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     organisation_id: int | None = Query(default=None, alias="organisation_id"),
+    include_cancelled: bool = Query(False, alias="include_cancelled"),
     _=Depends(get_current_active_user),
     __=Depends(RequirePermissionFromHeader("PURCHASE", "view")),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_purchase_vouchers(db, skip=skip, limit=limit, organisation_id=organisation_id)
+    return await list_purchase_vouchers(
+        db, skip=skip, limit=limit, organisation_id=organisation_id, include_cancelled=include_cancelled
+    )
 
 
 @router.get("/next-number")
@@ -108,27 +111,29 @@ async def update_voucher(
     return updated
 
 
-@router.delete("/{voucher_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_voucher(
+@router.post("/{voucher_id}/cancel", response_model=PurchaseVoucherResponse)
+async def cancel_voucher(
     voucher_id: int,
     request: Request,
     current_user: User = Depends(get_current_active_user),
-    __=Depends(RequirePermissionFromHeader("PURCHASE", "delete")),
+    __=Depends(RequirePermissionFromHeader("PURCHASE", "update")),
     db: AsyncSession = Depends(get_db),
 ):
     existing = await get_purchase_voucher(db, voucher_id)
+    old_snapshot = AuditLogService.serialize_instance(existing)
+    cancelled = await cancel_purchase_voucher(db, voucher_id)
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    await AuditLogService.log_delete(
+    await AuditLogService.log_update(
         db=db,
-        organisation_id=existing.organisation_id,
+        organisation_id=cancelled.organisation_id,
         user_id=current_user.id,
         module_name="Purchase",
         entity_name="purchase_voucher",
-        entity_id=existing.id,
-        old_value=AuditLogService.serialize_instance(existing),
+        entity_id=cancelled.id,
+        old_value=old_snapshot,
+        new_value=AuditLogService.serialize_instance(cancelled),
         ip_address=client_ip,
         user_agent=user_agent,
     )
-    await delete_purchase_voucher(db, voucher_id)
-    return None
+    return cancelled

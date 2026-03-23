@@ -1,14 +1,14 @@
 'use client';
 import IconEdit from '@/components/icon/icon-edit';
 import IconPlus from '@/components/icon/icon-plus';
-import IconTrashLines from '@/components/icon/icon-trash-lines';
+import IconX from '@/components/icon/icon-x';
 import { sortBy } from 'lodash';
 import type { DataTableColumn, DataTableProps, DataTableSortStatus } from 'mantine-datatable';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import React, { useCallback, useEffect, useState } from 'react';
 import { organizationContext } from '@/lib/organizationContext';
-import { apiDelete, apiGet } from '@/lib/apiClient';
+import { apiGet, apiPost } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 
 type PurchaseVoucherRecord = {
@@ -17,6 +17,7 @@ type PurchaseVoucherRecord = {
     supplierName: string;
     date: string;
     amount: string;
+    status: string;
 };
 
 const DataTable = dynamic<DataTableProps<PurchaseVoucherRecord>>(() => import('mantine-datatable').then((mod) => mod.DataTable), {
@@ -32,7 +33,6 @@ const ComponentsAppsPurchaseList = () => {
     const canViewPurchase = organizationContext.hasPermission('Purchase', 'view');
     const canCreatePurchase = organizationContext.hasPermission('Purchase', 'create');
     const canUpdatePurchase = organizationContext.hasPermission('Purchase', 'update');
-    const canDeletePurchase = organizationContext.hasPermission('Purchase', 'delete');
     const [isSuperAdmin, setIsSuperAdmin] = useState(organizationContext.getIsSuperAdmin());
     const [organisationsList, setOrganisationsList] = useState<any[]>([]);
     const [orgsLoading, setOrgsLoading] = useState<boolean>(false);
@@ -49,7 +49,7 @@ const ComponentsAppsPurchaseList = () => {
 
     const [search, setSearch] = useState('');
     const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
-        columnAccessor: 'firstName',
+        columnAccessor: 'voucherNo',
         direction: 'asc',
     });
     const formatVoucherNo = (value: string | number) => String(value).padStart(4, '0');
@@ -103,12 +103,13 @@ const ComponentsAppsPurchaseList = () => {
         }
         const storedId = organizationContext.getSelectedOrganizationId();
         const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        if (storedMatch && !organisationId) {
-            setOrganisationId(String(storedMatch.id));
+        const currentMatch = organisationId ? organisationsList.find((org: any) => String(org.id) === String(organisationId)) : null;
+        if (currentMatch) {
             return;
         }
-        if (!organisationId) {
-            setOrganisationId(String(organisationsList[0].id));
+        const fallback = storedMatch || organisationsList[0];
+        if (fallback) {
+            setOrganisationId(String(fallback.id));
         }
     }, [organisationsList, organisationId]);
 
@@ -146,12 +147,16 @@ const ComponentsAppsPurchaseList = () => {
     useEffect(() => {
         const syncSelected = () => {
             const selected = organizationContext.getSelectedOrganizationId();
-            setOrganisationId(selected ? String(selected) : '');
+            const idStr = selected ? String(selected) : '';
+            const match = idStr && organisationsList.length ? organisationsList.find((org: any) => String(org.id) === idStr) : null;
+            if (match) {
+                setOrganisationId(String(match.id));
+            }
         };
         syncSelected();
         window.addEventListener('organization-permissions-updated', syncSelected);
         return () => window.removeEventListener('organization-permissions-updated', syncSelected);
-    }, []);
+    }, [organisationsList]);
 
     useEffect(() => {
         setPage(1);
@@ -175,7 +180,7 @@ const ComponentsAppsPurchaseList = () => {
             try {
                 const skip = (page - 1) * pageSize;
                 const data = await apiGet<any>(
-                    `purchase-vouchers?skip=${skip}&limit=${pageSize}&organisation_id=${Number(organisationId)}`
+                    `purchase-vouchers?skip=${skip}&limit=${pageSize}&organisation_id=${Number(organisationId)}&include_cancelled=true`
                 );
                 const normalized: PurchaseVoucherRecord[] = (Array.isArray(data) ? data : []).map((row: any) => ({
                     id: row.id,
@@ -183,6 +188,7 @@ const ComponentsAppsPurchaseList = () => {
                     supplierName: row.supplier_name || '-',
                     date: row.voucher_date ? new Date(row.voucher_date).toLocaleDateString() : '-',
                     amount: Number(row.total_amount || 0).toFixed(2),
+                    status: row.status || 'active',
                 }));
                 setItems(normalized);
                 setInitialRecords(sortBy(normalized, 'voucherNo'));
@@ -202,7 +208,8 @@ const ComponentsAppsPurchaseList = () => {
                     String(item.voucherNo).toLowerCase().includes(search.toLowerCase()) ||
                     item.supplierName.toLowerCase().includes(search.toLowerCase()) ||
                     item.date.toLowerCase().includes(search.toLowerCase()) ||
-                    item.amount.toLowerCase().includes(search.toLowerCase())
+                    item.amount.toLowerCase().includes(search.toLowerCase()) ||
+                    item.status.toLowerCase().includes(search.toLowerCase())
                 );
             });
         });
@@ -217,24 +224,24 @@ const ComponentsAppsPurchaseList = () => {
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
 
-    const deleteRow = async (id: number | null = null) => {
-        if (!window.confirm('Are you sure want to delete selected row ?')) {
+    const cancelRow = async (id: number | null = null) => {
+        if (!window.confirm('Are you sure you want to cancel the selected voucher(s)? Cancelled vouchers cannot be edited.')) {
             return;
         }
-        const ids = id ? [id] : (selectedRecords || []).map((d) => d.id);
+        const candidates = id ? items.filter((r) => r.id === id) : selectedRecords || [];
+        const ids = candidates.filter((r) => r.status !== 'cancelled').map((d) => d.id);
         if (!ids.length) {
             return;
         }
         try {
-            await Promise.all(ids.map((rowId: number) => apiDelete(`purchase-vouchers/${rowId}`)));
-            const remaining = items.filter((row) => !ids.includes(row.id));
-            setItems(remaining);
-            setInitialRecords(remaining);
-            setRecords(remaining);
+            await Promise.all(ids.map((rowId: number) => apiPost(`purchase-vouchers/${rowId}/cancel`)));
+            const updated = items.map((row) => (ids.includes(row.id) ? { ...row, status: 'cancelled' } : row));
+            setItems(updated);
+            setInitialRecords(updated);
+            setRecords(updated);
             setSelectedRecords([]);
-            setSearch('');
         } catch (error: any) {
-            window.alert(error?.message || 'Failed to delete voucher.');
+            window.alert(error?.message || 'Failed to cancel voucher.');
         }
     };
 
@@ -251,10 +258,10 @@ const ComponentsAppsPurchaseList = () => {
             <div className="invoice-table">
                 <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
                     <div className="flex items-center gap-2">
-                        {canDeletePurchase && (
-                            <button type="button" className="btn btn-danger gap-2" onClick={() => deleteRow()}>
-                                <IconTrashLines />
-                                Delete
+                        {canUpdatePurchase && selectedRecords.some((r) => r.status !== 'cancelled') && (
+                            <button type="button" className="btn btn-danger gap-2" onClick={() => cancelRow()}>
+                                <IconX />
+                                Cancel
                             </button>
                         )}
                         {canCreatePurchase && (
@@ -265,7 +272,7 @@ const ComponentsAppsPurchaseList = () => {
                         )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 ltr:ml-auto rtl:mr-auto">
-                        {organisationsList.length > 1 ? (
+                        {organisationsList.length > 0 ? (
                             <select
                                 id="organisationId"
                                 className="form-select w-full sm:w-64"
@@ -280,7 +287,7 @@ const ComponentsAppsPurchaseList = () => {
                                 ))}
                             </select>
                         ) : (
-                            <input id="organisationId" className="form-input w-full sm:w-64" value={selectedOrganisationLabel} readOnly />
+                            <input id="organisationId" className="form-input w-full sm:w-64" value={orgsLoading ? 'Loading organisations...' : 'No organisations'} readOnly />
                         )}
                         <input type="text" className="form-input w-full sm:w-48" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     </div>
@@ -295,9 +302,17 @@ const ComponentsAppsPurchaseList = () => {
                                 accessor: 'voucherNo',
                                 title: 'Purchase Voucher',
                                 sortable: true,
-                                render: ({ voucherNo, id }) => (
+                                render: ({ voucherNo, id, status }) => (
                                     <Link href={`/apps/purchase/edit?id=${id}`}>
-                                        <div className="font-semibold text-primary underline hover:no-underline">{`#${formatVoucherNo(voucherNo)}`}</div>
+                                        <div
+                                            className={
+                                                status === 'cancelled'
+                                                    ? 'font-semibold text-white-dark line-through'
+                                                    : 'font-semibold text-primary underline hover:no-underline'
+                                            }
+                                        >
+                                            {`#${formatVoucherNo(voucherNo)}`}
+                                        </div>
                                     </Link>
                                 ),
                             },
@@ -311,6 +326,22 @@ const ComponentsAppsPurchaseList = () => {
                                 sortable: true,
                             },
                             {
+                                accessor: 'status',
+                                title: 'Status',
+                                sortable: true,
+                                render: ({ status }) => (
+                                    <span
+                                        className={
+                                            status === 'cancelled'
+                                                ? 'badge badge-outline-danger'
+                                                : 'badge badge-outline-success'
+                                        }
+                                    >
+                                        {status === 'cancelled' ? 'Cancelled' : 'Active'}
+                                    </span>
+                                ),
+                            },
+                            {
                                 accessor: 'amount',
                                 sortable: true,
                                 titleClassName: 'text-right',
@@ -321,18 +352,19 @@ const ComponentsAppsPurchaseList = () => {
                                 title: 'Actions',
                                 sortable: false,
                                 textAlignment: 'center',
-                                render: ({ id }) => (
+                                render: ({ id, status }) => (
                                     <div className="mx-auto flex w-max items-center gap-4">
-                                        {canUpdatePurchase && (
-                                            <Link href={`/apps/purchase/edit?id=${id}`} className="flex hover:text-info">
-                                                <IconEdit className="h-4.5 w-4.5" />
-                                            </Link>
+                                        {canUpdatePurchase && status !== 'cancelled' && (
+                                            <>
+                                                <Link href={`/apps/purchase/edit?id=${id}`} className="flex hover:text-info">
+                                                    <IconEdit className="h-4.5 w-4.5" />
+                                                </Link>
+                                                <button type="button" className="flex hover:text-danger" onClick={(e) => cancelRow(id)} title="Cancel voucher">
+                                                    <IconX />
+                                                </button>
+                                            </>
                                         )}
-                                        {canDeletePurchase && (
-                                            <button type="button" className="flex hover:text-danger" onClick={(e) => deleteRow(id)}>
-                                                <IconTrashLines />
-                                            </button>
-                                        )}
+                                        {status === 'cancelled' && <span className="text-white-dark">—</span>}
                                     </div>
                                 ),
                             },

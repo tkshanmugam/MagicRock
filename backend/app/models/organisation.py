@@ -19,6 +19,7 @@ class Organisation(Base):
     ifsc_code = Column(String(32), nullable=True)
     branch = Column(String(255), nullable=True)
     logo_name = Column(String(255), nullable=True)
+    default_particulars = Column(String(255), nullable=True)
     is_valid = Column(Boolean, default=True, nullable=False)
     created_date = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

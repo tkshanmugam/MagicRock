@@ -25,6 +25,48 @@ const buildUploadsBaseUrl = (apiBaseUrl: string) => {
 };
 const UPLOADS_BASE_URL = buildUploadsBaseUrl(API_BASE_URL);
 
+const ORGANISATION_DEFAULTS: Array<{ keys: string[]; particulars: string; rate: number }> = [
+    { keys: ['amman'], particulars: "Coconut's husk", rate: 1 },
+    { keys: ['jaswanth', 'jaswant'], particulars: 'Coconuts', rate: 10 },
+    { keys: ['kumaran'], particulars: "Coconut's Shell", rate: 10 },
+];
+
+/** Map org ID -> { particulars, rate }. If name matching fails, add mapping here. */
+const ORG_ID_DEFAULTS: Record<number, { particulars: string; rate: number }> = {};
+
+const getDefaultParticularsAndRateForOrganisation = (
+    org?: { id?: number; name?: string; default_particulars?: string } | null
+): { particulars: string; rate: number } | null => {
+    if (!org) return null;
+    const defaultFromDb = (org as any)?.default_particulars ?? (org as any)?.defaultParticulars ?? '';
+    if (defaultFromDb && String(defaultFromDb).trim()) {
+        const particulars = String(defaultFromDb).trim();
+        const match = ORGANISATION_DEFAULTS.find((d) => d.particulars === particulars);
+        return { particulars, rate: match?.rate ?? 10 };
+    }
+    const id = org.id != null ? Number(org.id) : null;
+    if (id != null && ORG_ID_DEFAULTS[id]) {
+        return ORG_ID_DEFAULTS[id];
+    }
+    const orgName = (org as any)?.name ?? (org as any)?.organisation_name ?? (org as any)?.organisationName ?? '';
+    if (!orgName) return null;
+    const normalized = String(orgName).trim().toLowerCase().replace(/\s+/g, ' ');
+    for (const { keys, particulars, rate } of ORGANISATION_DEFAULTS) {
+        for (const key of keys) {
+            if (
+                normalized === key ||
+                normalized.startsWith(key + ' ') ||
+                normalized.endsWith(' ' + key) ||
+                normalized.includes(' ' + key + ' ') ||
+                normalized.includes(key)
+            ) {
+                return { particulars, rate };
+            }
+        }
+    }
+    return null;
+};
+
 const ComponentsAppsPurchaseAdd = () => {
     const canCreatePurchase = organizationContext.hasPermission('Purchase', 'create');
     const [isSuperAdmin, setIsSuperAdmin] = useState(organizationContext.getIsSuperAdmin());
@@ -65,7 +107,50 @@ const ComponentsAppsPurchaseAdd = () => {
         },
     ]);
 
+    const updateParticularsForOrganisation = useCallback(
+        (orgId: string) => {
+            const selectedOrg = organisationsList.find((org: any) => String(org.id) === String(orgId));
+            const defaults = getDefaultParticularsAndRateForOrganisation(selectedOrg);
+            if (!defaults) return;
+            setItems((prev) =>
+                prev.map((item: any) => ({
+                    ...item,
+                    particulars: defaults.particulars,
+                    rateRs: defaults.rate,
+                    amountRs: defaults.rate * (Number(item.bags) || Number(item.qtls) || Number(item.kgs) || 0) || '',
+                }))
+            );
+        },
+        [organisationsList]
+    );
+
+    const handleOrganisationChange = useCallback(
+        (e: React.ChangeEvent<HTMLSelectElement>) => {
+            const newId = e.target.value;
+            setOrganisationId(newId);
+            if (newId) {
+                const selectedOrg = organisationsList.find((org: any) => String(org.id) === String(newId));
+                const defaults = getDefaultParticularsAndRateForOrganisation(selectedOrg);
+                if (defaults) {
+                    setItems((prev) =>
+                        prev.map((item: any) => ({
+                            ...item,
+                            particulars: defaults.particulars,
+                            rateRs: defaults.rate,
+                            amountRs: defaults.rate * (Number(item.bags) || Number(item.qtls) || Number(item.kgs) || 0) || '',
+                        }))
+                    );
+                }
+            }
+        },
+        [organisationsList]
+    );
+
     const addItem = () => {
+        const selectedOrg = organisationsList.find((org: any) => String(org.id) === String(organisationId));
+        const defaults = getDefaultParticularsAndRateForOrganisation(selectedOrg);
+        const particulars = defaults?.particulars ?? '';
+        const rate = defaults?.rate ?? 0;
         let maxId = 0;
         maxId = items?.length ? items.reduce((max: number, character: any) => (character.id > max ? character.id : max), items[0].id) : 0;
 
@@ -73,11 +158,11 @@ const ComponentsAppsPurchaseAdd = () => {
             ...items,
             {
                 id: maxId + 1,
-                particulars: '',
+                particulars,
                 bags: '',
                 qtls: '',
                 kgs: '',
-                rateRs: '',
+                rateRs: rate,
                 amountRs: '',
             },
         ]);
@@ -157,11 +242,42 @@ const ComponentsAppsPurchaseAdd = () => {
     }, [isSuperAdmin]);
 
     useEffect(() => {
+        const syncSelected = () => {
+            const selected = organizationContext.getSelectedOrganizationId();
+            const idStr = selected ? String(selected) : '';
+            const match = idStr && organisationsList.length ? organisationsList.find((org: any) => String(org.id) === idStr) : null;
+            if (match) {
+                const newId = String(match.id);
+                setOrganisationId(newId);
+                updateParticularsForOrganisation(newId);
+            }
+        };
+        syncSelected();
+        window.addEventListener('organization-permissions-updated', syncSelected);
+        return () => window.removeEventListener('organization-permissions-updated', syncSelected);
+    }, [organisationsList, updateParticularsForOrganisation]);
+
+    useEffect(() => {
         if (organisationId) {
             organizationContext.setSelectedOrganizationId(Number(organisationId));
         }
         setVoucherNo('');
     }, [organisationId]);
+
+    useEffect(() => {
+        if (!organisationId || !organisationsList.length) return;
+        const selectedOrg = organisationsList.find((org: any) => String(org.id) === String(organisationId));
+        const defaults = getDefaultParticularsAndRateForOrganisation(selectedOrg);
+        if (!defaults) return;
+        setItems((prev) =>
+            prev.map((item: any) => ({
+                ...item,
+                particulars: defaults.particulars,
+                rateRs: defaults.rate,
+                amountRs: defaults.rate * (Number(item.bags) || Number(item.qtls) || Number(item.kgs) || 0) || '',
+            }))
+        );
+    }, [organisationId, organisationsList]);
 
     useEffect(() => {
         setCustomerDirectory(getCustomersForOrganisation(organisationId));
@@ -202,14 +318,17 @@ const ComponentsAppsPurchaseAdd = () => {
         }
         const storedId = organizationContext.getSelectedOrganizationId();
         const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        if (storedMatch && !organisationId) {
-            setOrganisationId(String(storedMatch.id));
+        const currentMatch = organisationId ? organisationsList.find((org: any) => String(org.id) === String(organisationId)) : null;
+        if (currentMatch) {
             return;
         }
-        if (!organisationId) {
-            setOrganisationId(String(organisationsList[0].id));
+        const fallback = storedMatch || organisationsList[0];
+        if (fallback) {
+            const newId = String(fallback.id);
+            setOrganisationId(newId);
+            updateParticularsForOrganisation(newId);
         }
-    }, [organisationsList, organisationId]);
+    }, [organisationsList, organisationId, updateParticularsForOrganisation]);
 
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
@@ -316,38 +435,33 @@ const ComponentsAppsPurchaseAdd = () => {
 
     return (
         <div className="panel px-4 py-6">
-            {isSuperAdmin ? (
-                <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
-                    <label htmlFor="organisationId" className="mb-0">
-                        Organisation Name
-                    </label>
+            <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
+                <label htmlFor="organisationId" className="mb-0">
+                    Organisation Name
+                </label>
+                {organisationsList.length > 0 ? (
                     <select
                         id="organisationId"
                         className="form-select w-full sm:w-72"
                         value={organisationId}
-                        onChange={(e) => setOrganisationId(e.target.value)}
+                        onChange={handleOrganisationChange}
                     >
-                        <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
+                        <option value="">Select Organisation</option>
                         {organisationsList.map((org: any) => (
                             <option key={org.id} value={org.id}>
                                 {org.name}
                             </option>
                         ))}
                     </select>
-                </div>
-            ) : (
-                <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
-                    <label htmlFor="organisationId" className="mb-0">
-                        Organisation Name
-                    </label>
+                ) : (
                     <input
                         id="organisationId"
                         className="form-input w-full sm:w-72"
-                        value={selectedOrganisationLabel}
+                        value={orgsLoading ? 'Loading organisations...' : 'Select Organisation'}
                         readOnly
                     />
-                </div>
-            )}
+                )}
+            </div>
             <div className="rounded border border-white-light p-4 dark:border-[#1b2e4b]">
                 <div className="flex items-start justify-between gap-4">
                     {selectedOrganisationLogoUrl && (

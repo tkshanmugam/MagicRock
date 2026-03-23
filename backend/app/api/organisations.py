@@ -134,6 +134,7 @@ async def create_organisation(
         account_number=organisation_data.account_number,
         ifsc_code=organisation_data.ifsc_code,
         branch=organisation_data.branch,
+        default_particulars=organisation_data.default_particulars,
         is_valid=organisation_data.is_valid,
         created_by=current_user.id
     )

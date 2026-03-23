@@ -105,6 +105,7 @@ class OrganisationBase(BaseModel):
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
     branch: Optional[str] = None
+    default_particulars: Optional[str] = None
     is_valid: bool = True
 
 
@@ -121,6 +122,7 @@ class OrganisationUpdate(BaseModel):
     account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
     branch: Optional[str] = None
+    default_particulars: Optional[str] = None
     is_valid: Optional[bool] = None
 
 
@@ -132,7 +134,8 @@ class OrganisationResponse(OrganisationBase):
     modified_by: Optional[int] = None
     modified_at: Optional[datetime] = None
     logo_name: Optional[str] = None
-    
+    default_particulars: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -279,6 +282,7 @@ class PurchaseVoucherResponse(PurchaseVoucherBase):
     total_qtls: Optional[Decimal] = None
     total_kgs: Optional[Decimal] = None
     total_amount: Optional[Decimal] = None
+    status: Optional[str] = "active"
     created_at: datetime
     updated_at: datetime
     items: List[PurchaseVoucherItemResponse] = []

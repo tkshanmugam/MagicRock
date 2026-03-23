@@ -10,6 +10,9 @@ from fastapi import HTTPException, status
 from app.models.purchase_voucher import PurchaseVoucher, PurchaseVoucherItem
 from app.api.schemas import PurchaseVoucherCreate, PurchaseVoucherUpdate, PurchaseVoucherItemCreate
 
+PURCHASE_VOUCHER_STATUS_ACTIVE = "active"
+PURCHASE_VOUCHER_STATUS_CANCELLED = "cancelled"
+
 
 def _safe_decimal(value: Optional[Decimal]) -> Decimal:
     if value is None:
@@ -45,7 +48,10 @@ async def _ensure_unique_voucher_no(
     organisation_id: Optional[int] = None,
     voucher_id: Optional[int] = None,
 ) -> None:
-    query = select(PurchaseVoucher).where(PurchaseVoucher.voucher_no == voucher_no)
+    query = select(PurchaseVoucher).where(
+        PurchaseVoucher.voucher_no == voucher_no,
+        PurchaseVoucher.status == PURCHASE_VOUCHER_STATUS_ACTIVE,
+    )
     if organisation_id is not None:
         query = query.where(PurchaseVoucher.organisation_id == organisation_id)
     if voucher_id is not None:
@@ -97,16 +103,21 @@ async def list_purchase_vouchers(
     skip: int = 0,
     limit: int = 100,
     organisation_id: Optional[int] = None,
+    include_cancelled: bool = False,
 ) -> List[PurchaseVoucher]:
     query = select(PurchaseVoucher).order_by(PurchaseVoucher.created_at.desc())
     if organisation_id is not None:
         query = query.where(PurchaseVoucher.organisation_id == organisation_id)
+    if not include_cancelled:
+        query = query.where(PurchaseVoucher.status == PURCHASE_VOUCHER_STATUS_ACTIVE)
     result = await db.execute(query.offset(skip).limit(limit))
     return result.scalars().all()
 
 
 async def get_next_voucher_number(db: AsyncSession, organisation_id: Optional[int] = None) -> int:
-    query = select(func.max(PurchaseVoucher.voucher_no))
+    query = select(func.max(PurchaseVoucher.voucher_no)).where(
+        PurchaseVoucher.status == PURCHASE_VOUCHER_STATUS_ACTIVE
+    )
     if organisation_id is not None:
         query = query.where(PurchaseVoucher.organisation_id == organisation_id)
     result = await db.execute(query)
@@ -124,6 +135,8 @@ async def get_purchase_voucher(db: AsyncSession, voucher_id: int) -> PurchaseVou
 
 async def update_purchase_voucher(db: AsyncSession, voucher_id: int, payload: PurchaseVoucherUpdate) -> PurchaseVoucher:
     voucher = await get_purchase_voucher(db, voucher_id)
+    if voucher.status == PURCHASE_VOUCHER_STATUS_CANCELLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot update a cancelled voucher")
 
     if payload.voucher_no is not None:
         await _ensure_unique_voucher_no(db, payload.voucher_no, payload.organisation_id, voucher_id=voucher_id)
@@ -168,6 +181,11 @@ async def update_purchase_voucher(db: AsyncSession, voucher_id: int, payload: Pu
     return voucher
 
 
-async def delete_purchase_voucher(db: AsyncSession, voucher_id: int) -> None:
+async def cancel_purchase_voucher(db: AsyncSession, voucher_id: int) -> PurchaseVoucher:
     voucher = await get_purchase_voucher(db, voucher_id)
-    await db.delete(voucher)
+    if voucher.status == PURCHASE_VOUCHER_STATUS_CANCELLED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Voucher is already cancelled")
+    voucher.status = PURCHASE_VOUCHER_STATUS_CANCELLED
+    await db.flush()
+    await db.refresh(voucher)
+    return voucher
