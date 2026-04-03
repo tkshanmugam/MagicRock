@@ -11,6 +11,8 @@ from app.api.schemas import (
     SalesInvoiceCreate,
     SalesInvoiceUpdate,
     SalesInvoiceResponse,
+    SalesInvoiceShareResponse,
+    OrganisationShareProfile,
     SalesInvoiceListResponse,
     SalesInvoiceNumberResponse,
 )
@@ -19,6 +21,7 @@ from app.services.sales_invoice_service import (
     create_sales_invoice,
     list_sales_invoices,
     get_sales_invoice,
+    get_organisation_for_share,
     update_sales_invoice,
     cancel_sales_invoice,
     get_next_sales_invoice_number,
@@ -86,6 +89,43 @@ async def get_next_invoice_number(
 ):
     invoice_number = await get_next_sales_invoice_number(db, organisation_id=organisation_id)
     return SalesInvoiceNumberResponse(invoice_number=invoice_number)
+
+
+@router.get("/share/{invoice_id}", response_model=SalesInvoiceShareResponse)
+async def get_invoice_share(
+    invoice_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Public read-only invoice for shared links (/apps/invoice/share). No login or API org header.
+    Anyone with the URL can view; organisation letterhead is included in organisation_profile.
+    """
+    invoice = await get_sales_invoice(db, invoice_id)
+    org = await get_organisation_for_share(db, invoice.organisation_id)
+    base = SalesInvoiceResponse.model_validate(invoice)
+    profile: OrganisationShareProfile | None = None
+    if org:
+        profile = OrganisationShareProfile(
+            id=org.id,
+            name=org.name,
+            address=org.address,
+            city=getattr(org, "city", None),
+            bank_name=org.bank_name,
+            account_number=org.account_number,
+            ifsc_code=org.ifsc_code,
+            branch=org.branch,
+            logo_name=org.logo_name,
+            gstin=getattr(org, "gstin", None) or getattr(org, "gst_number", None),
+            pan=getattr(org, "pan", None) or getattr(org, "pan_number", None),
+            phone=getattr(org, "phone", None) or getattr(org, "mobile", None),
+            email=getattr(org, "email", None),
+            website=getattr(org, "website", None) or getattr(org, "web", None),
+            tagline=getattr(org, "tagline", None)
+            or getattr(org, "slogan", None)
+            or getattr(org, "description", None),
+            upi_id=getattr(org, "upi_id", None) or getattr(org, "upi", None),
+        )
+    return SalesInvoiceShareResponse(**base.model_dump(), organisation_profile=profile)
 
 
 @router.get("/{invoice_id}", response_model=SalesInvoiceResponse)

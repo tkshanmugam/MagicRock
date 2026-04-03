@@ -252,6 +252,7 @@ class PurchaseVoucherBase(BaseModel):
     voucher_no: int
     voucher_date: Optional[date] = None
     supplier_name: Optional[str] = None
+    supplier_address: Optional[str] = None
     supplier_mobile: Optional[str] = None
     lorry_no: Optional[str] = None
 
@@ -271,6 +272,7 @@ class PurchaseVoucherUpdate(BaseModel):
     voucher_no: Optional[int] = None
     voucher_date: Optional[date] = None
     supplier_name: Optional[str] = None
+    supplier_address: Optional[str] = None
     supplier_mobile: Optional[str] = None
     lorry_no: Optional[str] = None
     items: Optional[List[PurchaseVoucherItemCreate]] = None
@@ -427,6 +429,31 @@ class SalesInvoiceResponse(SalesInvoiceBase):
 
     class Config:
         from_attributes = True
+
+
+class OrganisationShareProfile(BaseModel):
+    """Public seller details embedded in invoice share responses (no auth)."""
+
+    id: int
+    name: str
+    address: Optional[str] = None
+    city: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    branch: Optional[str] = None
+    logo_name: Optional[str] = None
+    gstin: Optional[str] = None
+    pan: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    tagline: Optional[str] = None
+    upi_id: Optional[str] = None
+
+
+class SalesInvoiceShareResponse(SalesInvoiceResponse):
+    organisation_profile: Optional[OrganisationShareProfile] = None
 
 
 class SalesInvoiceListResponse(BaseModel):

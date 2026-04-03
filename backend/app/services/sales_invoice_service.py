@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from app.models.sales_invoice import SalesInvoice, SalesInvoiceItem
+from app.models.organisation import Organisation
 from app.models.tax_configuration import TaxConfiguration
 from app.api.schemas import SalesInvoiceCreate, SalesInvoiceUpdate, SalesInvoiceItemCreate
 from app.services.number_to_words import amount_to_words
@@ -235,6 +236,11 @@ async def get_sales_invoice(db: AsyncSession, invoice_id: int) -> SalesInvoice:
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales invoice not found")
     return invoice
+
+
+async def get_organisation_for_share(db: AsyncSession, organisation_id: int) -> Organisation | None:
+    result = await db.execute(select(Organisation).where(Organisation.id == organisation_id))
+    return result.scalar_one_or_none()
 
 
 async def update_sales_invoice(

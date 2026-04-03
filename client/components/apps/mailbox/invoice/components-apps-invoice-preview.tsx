@@ -14,7 +14,7 @@ import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { useSearchParams } from 'next/navigation';
 import { numberToWords } from '@/lib/numberToWords';
-import { fetchSalesInvoice, SalesInvoice } from '@/lib/salesInvoiceApi';
+import { fetchSalesInvoice, fetchSalesInvoiceForShare, SalesInvoice } from '@/lib/salesInvoiceApi';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 const buildUploadsBaseUrl = (apiBaseUrl: string) => {
@@ -187,6 +187,9 @@ const ComponentsAppsInvoicePreview = ({ actionVariant = 'full' }: { actionVarian
     }, []);
 
     const fetchOrganisations = useCallback(async () => {
+        if (actionVariant === 'share') {
+            return;
+        }
         if (!authState.isAuthStateReady()) {
             return;
         }
@@ -201,9 +204,12 @@ const ComponentsAppsInvoicePreview = ({ actionVariant = 'full' }: { actionVarian
         } finally {
             setOrgsLoading(false);
         }
-    }, [isSuperAdmin]);
+    }, [isSuperAdmin, actionVariant]);
 
     useEffect(() => {
+        if (actionVariant === 'share') {
+            return;
+        }
         if (authState.isAuthStateReady()) {
             fetchOrganisations();
             return;
@@ -222,21 +228,46 @@ const ComponentsAppsInvoicePreview = ({ actionVariant = 'full' }: { actionVarian
             }
         }, 100);
         return () => clearInterval(interval);
-    }, [fetchOrganisations]);
+    }, [fetchOrganisations, actionVariant]);
 
     useEffect(() => {
         if (!invoiceId) {
             return;
         }
         setLoading(true);
-        fetchSalesInvoice(invoiceId)
-            .then((data) => setInvoice(data))
+        const load =
+            actionVariant === 'share' ? fetchSalesInvoiceForShare(invoiceId) : fetchSalesInvoice(invoiceId);
+        load.then((data) => setInvoice(data))
             .catch((error) => console.error('Failed to load invoice', error))
             .finally(() => setLoading(false));
-    }, [invoiceId]);
+    }, [invoiceId, actionVariant]);
 
     const { selectedOrganisationLabel, selectedOrganisationAddressLines, selectedOrganisationLogoUrl, selectedOrganisationBankDetails, selectedOrganisationMeta } = useMemo(() => {
         const organisationId = invoice?.organisation_id;
+        const p = invoice?.organisation_profile;
+        if (actionVariant === 'share' && p) {
+            const addressLines = splitAddressLines(p.address, p.city);
+            return {
+                selectedOrganisationLabel: p.name || (organisationId ? `Organisation #${organisationId}` : 'Organisation'),
+                selectedOrganisationAddressLines: addressLines,
+                selectedOrganisationLogoUrl: p.logo_name ? getLogoUrl(p.logo_name) : '',
+                selectedOrganisationBankDetails: {
+                    bank_name: p.bank_name || '',
+                    account_number: p.account_number || '',
+                    ifsc_code: p.ifsc_code || '',
+                    branch: p.branch || '',
+                    upi_id: p.upi_id || '',
+                },
+                selectedOrganisationMeta: {
+                    pan: p.pan || '',
+                    gstin: p.gstin || '',
+                    phone: p.phone || '',
+                    email: p.email || '',
+                    website: p.website || '',
+                    tagline: p.tagline || '',
+                },
+            };
+        }
         const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
         const addressLines = splitAddressLines(selectedOrganisation?.address, selectedOrganisation?.city);
         return {
@@ -259,7 +290,7 @@ const ComponentsAppsInvoicePreview = ({ actionVariant = 'full' }: { actionVarian
                 tagline: selectedOrganisation?.tagline || selectedOrganisation?.slogan || selectedOrganisation?.description || '',
             },
         };
-    }, [invoice?.organisation_id, organisationsList, getLogoUrl]);
+    }, [invoice, invoice?.organisation_id, invoice?.organisation_profile, organisationsList, getLogoUrl, actionVariant]);
 
     const invoiceMeta = useMemo(() => {
         return {

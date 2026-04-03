@@ -42,7 +42,6 @@ const ComponentsAppsPurchaseEdit = () => {
     const [supplierStateCode, setSupplierStateCode] = useState<string>('');
     const [supplierGstin, setSupplierGstin] = useState<string>('');
     const [supplierContact, setSupplierContact] = useState<string>('');
-    const [lorryNo, setLorryNo] = useState<string>('');
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const inputBorderClass = 'form-input !border-t-0 !border-l-0 !border-r-0 !rounded-none';
     const getLogoUrl = useCallback((logoName: string) => {
@@ -105,7 +104,8 @@ const ComponentsAppsPurchaseEdit = () => {
 
     const applyCustomerSelection = useCallback((customer: CustomerRecord) => {
         setSupplierName(customer.name);
-        setSupplierAddress(customer.address);
+        // Do not overwrite address the user already entered (or loaded from the voucher)
+        setSupplierAddress((prev) => (prev.trim() ? prev : customer.address || ''));
         setSupplierState(customer.state);
         setSupplierStateCode(customer.state_code);
         setSupplierGstin(customer.gstin);
@@ -206,8 +206,8 @@ const ComponentsAppsPurchaseEdit = () => {
                 setVoucherNo(String(voucher.voucher_no ?? ''));
                 setVoucherDate(voucher.voucher_date || '');
                 setSupplierName(voucher.supplier_name || '');
+                setSupplierAddress(voucher.supplier_address ?? voucher.supplierAddress ?? '');
                 setSupplierContact(voucher.supplier_mobile || '');
-                setLorryNo(voucher.lorry_no || '');
                 if (voucher.organisation_id) {
                     setOrganisationId(String(voucher.organisation_id));
                 }
@@ -245,13 +245,13 @@ const ComponentsAppsPurchaseEdit = () => {
         }
         setIsSaving(true);
         try {
-            await apiPut(`purchase-vouchers/${voucherId}`, {
+            const updated = await apiPut<any>(`purchase-vouchers/${voucherId}`, {
                 organisation_id: organisationId ? Number(organisationId) : null,
                 voucher_no: Number(voucherNo),
                 voucher_date: voucherDate || null,
                 supplier_name: supplierName || null,
+                supplier_address: supplierAddress || null,
                 supplier_mobile: supplierContact || null,
-                lorry_no: lorryNo || null,
                 items: items.map((item: any) => ({
                     rate: Number(item.rateRs || 0),
                     particulars: item.particulars || null,
@@ -261,6 +261,10 @@ const ComponentsAppsPurchaseEdit = () => {
                     amount: Number(item.amountRs || 0),
                 })),
             });
+            const savedAddr = updated?.supplier_address ?? updated?.supplierAddress ?? '';
+            if (savedAddr !== undefined) {
+                setSupplierAddress(savedAddr || '');
+            }
             window.alert('Purchase voucher saved.');
         } catch (error: any) {
             window.alert(error?.message || 'Failed to update purchase voucher.');
@@ -348,24 +352,6 @@ const ComponentsAppsPurchaseEdit = () => {
                                     <option key={customer.id} value={customer.name} label={customer.gstin} />
                                 ))}
                             </datalist>
-                        </div>
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-2">
-                            <div>Cell</div>
-                            <input
-                                id="voucherCell"
-                                className={`${inputBorderClass} h-8 text-sm`}
-                                value={supplierContact}
-                                onChange={(e) => setSupplierContact(e.target.value)}
-                            />
-                        </div>
-                        <div className="grid grid-cols-[120px_1fr] items-center gap-2">
-                            <div>Lorry</div>
-                            <input
-                                id="voucherLorry"
-                                className={`${inputBorderClass} h-8 text-sm`}
-                                value={lorryNo}
-                                onChange={(e) => setLorryNo(e.target.value)}
-                            />
                         </div>
                     </div>
                 </div>

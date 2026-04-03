@@ -71,6 +71,7 @@ async def create_purchase_voucher(db: AsyncSession, payload: PurchaseVoucherCrea
         voucher_no=payload.voucher_no,
         voucher_date=payload.voucher_date,
         supplier_name=payload.supplier_name,
+        supplier_address=payload.supplier_address,
         supplier_mobile=payload.supplier_mobile,
         lorry_no=payload.lorry_no,
         **totals,
@@ -115,9 +116,7 @@ async def list_purchase_vouchers(
 
 
 async def get_next_voucher_number(db: AsyncSession, organisation_id: Optional[int] = None) -> int:
-    query = select(func.max(PurchaseVoucher.voucher_no)).where(
-        PurchaseVoucher.status == PURCHASE_VOUCHER_STATUS_ACTIVE
-    )
+    query = select(func.max(PurchaseVoucher.voucher_no))
     if organisation_id is not None:
         query = query.where(PurchaseVoucher.organisation_id == organisation_id)
     result = await db.execute(query)
@@ -149,6 +148,9 @@ async def update_purchase_voucher(db: AsyncSession, voucher_id: int, payload: Pu
         voucher.voucher_date = payload.voucher_date
     if payload.supplier_name is not None:
         voucher.supplier_name = payload.supplier_name
+    # Respect explicit body fields (including null) when client sends the key
+    if "supplier_address" in payload.model_fields_set:
+        voucher.supplier_address = payload.supplier_address
     if payload.supplier_mobile is not None:
         voucher.supplier_mobile = payload.supplier_mobile
     if payload.lorry_no is not None:
@@ -177,6 +179,7 @@ async def update_purchase_voucher(db: AsyncSession, voucher_id: int, payload: Pu
                 )
             )
 
+    await db.flush()
     await db.refresh(voucher)
     return voucher
 

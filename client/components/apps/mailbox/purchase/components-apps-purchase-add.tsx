@@ -361,7 +361,7 @@ const ComponentsAppsPurchaseAdd = () => {
 
     const applyCustomerSelection = useCallback((customer: CustomerRecord) => {
         setSupplierName(customer.name);
-        setSupplierAddress(customer.address);
+        setSupplierAddress((prev) => (prev.trim() ? prev : customer.address || ''));
         setSupplierState(customer.state);
         setSupplierStateCode(customer.state_code);
         setSupplierGstin(customer.gstin);
@@ -396,6 +396,7 @@ const ComponentsAppsPurchaseAdd = () => {
                 voucher_no: Number(voucherNo),
                 voucher_date: voucherDate || null,
                 supplier_name: supplierName || null,
+                supplier_address: supplierAddress || null,
                 supplier_mobile: supplierContact || null,
                 items: items.map((item: any) => ({
                     rate: Number(item.rateRs || 0),

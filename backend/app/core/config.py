@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     API_KEYS: str = ""  # Comma-separated list of API keys
     API_KEY_HEADER: str = "X-API-KEY"
     API_KEY_REQUIRED: bool = True
-    API_KEY_PUBLIC_ENDPOINTS: str = "/api/v1/health,/uploads"  # Comma-separated paths that don't require API key (docs/redoc are always public)
+    API_KEY_PUBLIC_ENDPOINTS: str = "/api/v1/health,/uploads,/api/v1/sales-invoices/share"  # Comma-separated paths (prefix match); docs/redoc always public
     
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

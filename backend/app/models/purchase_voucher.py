@@ -16,6 +16,7 @@ class PurchaseVoucher(Base):
     voucher_no = Column(Integer, nullable=False, index=True)
     voucher_date = Column(Date, nullable=True, index=True)
     supplier_name = Column(String(255), nullable=True)
+    supplier_address = Column(String(500), nullable=True)
     supplier_mobile = Column(String(50), nullable=True)
     lorry_no = Column(String(100), nullable=True)
     total_bags = Column(Integer, nullable=True)
