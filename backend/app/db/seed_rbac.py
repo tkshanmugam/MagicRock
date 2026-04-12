@@ -40,12 +40,14 @@ async def seed_rbac_data(db: AsyncSession) -> None:
         {"code": "REPORTS", "name": "Reports"},
         {"code": "BILLING", "name": "Billing"},
         {"code": "SALES", "name": "Sales"},
+        {"code": "CUSTOMERS", "name": "Customers"},
         {"code": "PURCHASE", "name": "Purchase"},
         {"code": "USERS", "name": "Users"},
         {"code": "ROLES", "name": "Roles"},
         {"code": "MODULES", "name": "Modules"},
         {"code": "ROLE_PERMISSIONS", "name": "Role Permissions"},
         {"code": "ORGANIZATIONS", "name": "Organizations"},
+        {"code": "AUDIT", "name": "Audit"},
     ]
     
     modules_map = {}

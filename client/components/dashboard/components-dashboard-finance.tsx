@@ -7,6 +7,7 @@ const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false })
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { getTranslation } from '@/i18n';
 
 type RangeMode = 'today' | 'month';
 
@@ -45,6 +46,7 @@ const formatNumber = (value: number) =>
     new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value || 0);
 
 const ComponentsDashboardFinance = () => {
+    const { t } = getTranslation();
     const [range, setRange] = useState<RangeMode>('month');
     const [summary, setSummary] = useState<DashboardSummary | null>(null);
     const [trends, setTrends] = useState<DashboardTrends | null>(null);
@@ -234,16 +236,16 @@ const ComponentsDashboardFinance = () => {
                 bar: { columnWidth: '40%', borderRadius: 6 },
             },
             dataLabels: { enabled: false },
-            xaxis: { categories: summary?.top_products?.map((item) => item.name || 'Unknown') || [] },
+            xaxis: { categories: summary?.top_products?.map((item) => item.name || t('db_unknown')) || [] },
             colors: ['#f59e0b'],
         }),
-        [summary?.top_products]
+        [summary?.top_products, t]
     );
 
     if (!canView) {
         return (
             <div className="panel text-center text-danger">
-                You do not have permission to view the dashboard.
+                {t('db_no_permission')}
             </div>
         );
     }
@@ -251,7 +253,7 @@ const ComponentsDashboardFinance = () => {
     if (!isSuperAdmin && !selectedOrgId) {
         return (
             <div className="panel text-center text-warning">
-                Select an organization to view dashboard metrics.
+                {t('db_select_org_prompt')}
             </div>
         );
     }
@@ -260,8 +262,8 @@ const ComponentsDashboardFinance = () => {
         <div className="space-y-6">
             <div className="panel flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold">Dashboard</h2>
-                    <p className="text-sm text-white-dark">Real-time metrics scoped to your organization.</p>
+                    <h2 className="text-lg font-semibold">{t('dashboard')}</h2>
+                    <p className="text-sm text-white-dark">{t('db_dashboard_subtitle')}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     {organisationsList.length > 1 ? (
@@ -271,7 +273,7 @@ const ComponentsDashboardFinance = () => {
                             value={organisationId}
                             onChange={(e) => setOrganisationId(e.target.value)}
                         >
-                            <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
+                            <option value="">{orgsLoading ? t('db_loading_orgs') : t('db_select_organisation')}</option>
                             {organisationsList.map((org: any) => (
                                 <option key={org.id} value={org.id}>
                                     {org.name}
@@ -280,7 +282,7 @@ const ComponentsDashboardFinance = () => {
                         </select>
                     ) : organisationsList.length === 1 ? (
                         <div className="text-sm font-medium text-white-dark">
-                            {organisationsList[0]?.name || 'Organisation'}
+                            {organisationsList[0]?.name || t('th_organisation')}
                         </div>
                     ) : null}
                     <div className="flex gap-2">
@@ -289,21 +291,21 @@ const ComponentsDashboardFinance = () => {
                         onClick={() => setRange('today')}
                         type="button"
                     >
-                        Today
+                        {t('db_today')}
                     </button>
                     <button
                         className={`btn ${range === 'month' ? 'btn-primary' : 'btn-outline-primary'}`}
                         onClick={() => setRange('month')}
                         type="button"
                     >
-                        This Month
+                        {t('db_this_month')}
                     </button>
                     </div>
                 </div>
             </div>
 
             {isLoading && (
-                <div className="panel text-center text-white-dark">Loading dashboard metrics...</div>
+                <div className="panel text-center text-white-dark">{t('db_loading_metrics')}</div>
             )}
 
             {error && !isLoading && (
@@ -314,42 +316,46 @@ const ComponentsDashboardFinance = () => {
                 <>
                     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                         <div className="panel">
-                            <h3 className="text-sm font-semibold text-white-dark">Total Sales</h3>
+                            <h3 className="text-sm font-semibold text-white-dark">{t('db_total_sales')}</h3>
                             <p className="text-xl font-bold">{formatCurrency(summary.kpis.sales.range)}</p>
                             <p className="text-xs text-white-dark">
-                                Today {formatCurrency(summary.kpis.sales.today)} · Month {formatCurrency(summary.kpis.sales.month)}
+                                {t('db_today')} {formatCurrency(summary.kpis.sales.today)} · {t('th_month')}{' '}
+                                {formatCurrency(summary.kpis.sales.month)}
                             </p>
                         </div>
                         <div className="panel">
-                            <h3 className="text-sm font-semibold text-white-dark">Total Purchases</h3>
+                            <h3 className="text-sm font-semibold text-white-dark">{t('db_total_purchases')}</h3>
                             <p className="text-xl font-bold">{formatCurrency(summary.kpis.purchases.range)}</p>
                             <p className="text-xs text-white-dark">
-                                Today {formatCurrency(summary.kpis.purchases.today)} · Month {formatCurrency(summary.kpis.purchases.month)}
+                                {t('db_today')} {formatCurrency(summary.kpis.purchases.today)} · {t('th_month')}{' '}
+                                {formatCurrency(summary.kpis.purchases.month)}
                             </p>
                         </div>
                         <div className="panel">
-                            <h3 className="text-sm font-semibold text-white-dark">Net Revenue</h3>
+                            <h3 className="text-sm font-semibold text-white-dark">{t('db_net_revenue')}</h3>
                             <p className="text-xl font-bold">{formatCurrency(summary.kpis.net_revenue.range)}</p>
                             <p className="text-xs text-white-dark">
-                                Today {formatCurrency(summary.kpis.net_revenue.today)} · Month {formatCurrency(summary.kpis.net_revenue.month)}
+                                {t('db_today')} {formatCurrency(summary.kpis.net_revenue.today)} · {t('th_month')}{' '}
+                                {formatCurrency(summary.kpis.net_revenue.month)}
                             </p>
                         </div>
                         <div className="panel">
-                            <h3 className="text-sm font-semibold text-white-dark">Tax Collected</h3>
+                            <h3 className="text-sm font-semibold text-white-dark">{t('db_tax_collected')}</h3>
                             <p className="text-xl font-bold">{formatCurrency(summary.kpis.tax.range)}</p>
                             <p className="text-xs text-white-dark">
-                                Today {formatCurrency(summary.kpis.tax.today)} · Month {formatCurrency(summary.kpis.tax.month)}
+                                {t('db_today')} {formatCurrency(summary.kpis.tax.today)} · {t('th_month')}{' '}
+                                {formatCurrency(summary.kpis.tax.month)}
                             </p>
                         </div>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="panel">
-                            <h3 className="text-sm font-semibold text-white-dark">Outstanding Receivables</h3>
+                            <h3 className="text-sm font-semibold text-white-dark">{t('db_outstanding_receivables')}</h3>
                             <p className="text-2xl font-bold">{formatCurrency(summary.kpis.receivables)}</p>
                         </div>
                         <div className="panel">
-                            <h3 className="text-sm font-semibold text-white-dark">Outstanding Payables</h3>
+                            <h3 className="text-sm font-semibold text-white-dark">{t('db_outstanding_payables')}</h3>
                             <p className="text-2xl font-bold">{formatCurrency(summary.kpis.payables)}</p>
                         </div>
                     </div>
@@ -357,7 +363,7 @@ const ComponentsDashboardFinance = () => {
                     <div className="grid gap-4 lg:grid-cols-3">
                         <div className="panel lg:col-span-2">
                             <div className="mb-4 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-white-dark">Sales vs Purchases Trend</h3>
+                                <h3 className="text-sm font-semibold text-white-dark">{t('db_sales_vs_purchases_trend')}</h3>
                                 <span className="text-xs text-white-dark">
                                     {summary.range.start_date} → {summary.range.end_date}
                                 </span>
@@ -368,16 +374,16 @@ const ComponentsDashboardFinance = () => {
                                     height={320}
                                     options={lineChartOptions}
                                     series={[
-                                        { name: 'Sales', data: salesTrendSeries.sales },
-                                        { name: 'Purchases', data: salesTrendSeries.purchases },
+                                        { name: t('db_chart_sales'), data: salesTrendSeries.sales },
+                                        { name: t('db_chart_purchases'), data: salesTrendSeries.purchases },
                                     ]}
                                 />
                             ) : (
-                                <div className="text-center text-white-dark">No trend data available.</div>
+                                <div className="text-center text-white-dark">{t('db_no_trend_data')}</div>
                             )}
                         </div>
                         <div className="panel">
-                            <h3 className="mb-4 text-sm font-semibold text-white-dark">Tax Summary</h3>
+                            <h3 className="mb-4 text-sm font-semibold text-white-dark">{t('db_tax_summary')}</h3>
                             {taxSummary ? (
                                 <div className="space-y-3 text-sm">
                                     <div className="flex items-center justify-between">
@@ -393,18 +399,18 @@ const ComponentsDashboardFinance = () => {
                                         <span className="font-semibold">{formatCurrency(taxSummary.igst)}</span>
                                     </div>
                                     <div className="border-t border-white-light pt-2 text-base font-semibold">
-                                        Total {formatCurrency(taxSummary.total)}
+                                        {t('db_total')} {formatCurrency(taxSummary.total)}
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center text-white-dark">No tax data available.</div>
+                                <div className="text-center text-white-dark">{t('db_no_tax_data')}</div>
                             )}
                         </div>
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-2">
                         <div className="panel">
-                            <h3 className="mb-4 text-sm font-semibold text-white-dark">Top Products</h3>
+                            <h3 className="mb-4 text-sm font-semibold text-white-dark">{t('db_top_products')}</h3>
                             {summary.top_products.length ? (
                                 <>
                                     <ReactApexChart
@@ -413,7 +419,7 @@ const ComponentsDashboardFinance = () => {
                                         options={barChartOptions}
                                         series={[
                                             {
-                                                name: 'Total Value',
+                                                name: t('db_chart_total_value'),
                                                 data: summary.top_products.map((item) => item.total_value),
                                             },
                                         ]}
@@ -421,34 +427,34 @@ const ComponentsDashboardFinance = () => {
                                     <div className="mt-4 space-y-2 text-sm text-white-dark">
                                         {summary.top_products.map((item) => (
                                             <div key={item.name || 'unknown'} className="flex items-center justify-between">
-                                                <span>{item.name || 'Unknown'}</span>
+                                                <span>{item.name || t('db_unknown')}</span>
                                                 <span>
-                                                    {formatNumber(item.quantity)} qty · {formatCurrency(item.total_value)}
+                                                    {formatNumber(item.quantity)} {t('db_qty')} · {formatCurrency(item.total_value)}
                                                 </span>
                                             </div>
                                         ))}
                                     </div>
                                 </>
                             ) : (
-                                <div className="text-center text-white-dark">No product data available.</div>
+                                <div className="text-center text-white-dark">{t('db_no_product_data')}</div>
                             )}
                         </div>
                         <div className="panel">
-                            <h3 className="mb-4 text-sm font-semibold text-white-dark">Top Customers</h3>
+                            <h3 className="mb-4 text-sm font-semibold text-white-dark">{t('db_top_customers')}</h3>
                             {summary.top_customers.length ? (
                                 <div className="table-responsive">
                                     <table className="table-hover table">
                                         <thead>
                                             <tr>
-                                                <th>Customer</th>
-                                                <th className="text-right">Revenue</th>
-                                                <th className="text-right">Invoices</th>
+                                                <th>{t('th_customer')}</th>
+                                                <th className="text-right">{t('th_revenue')}</th>
+                                                <th className="text-right">{t('th_invoices')}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {summary.top_customers.map((customer) => (
                                                 <tr key={customer.name || 'unknown'}>
-                                                    <td>{customer.name || 'Unknown'}</td>
+                                                    <td>{customer.name || t('db_unknown')}</td>
                                                     <td className="text-right">{formatCurrency(customer.total_value)}</td>
                                                     <td className="text-right">{customer.invoice_count}</td>
                                                 </tr>
@@ -457,13 +463,14 @@ const ComponentsDashboardFinance = () => {
                                     </table>
                                 </div>
                             ) : (
-                                <div className="text-center text-white-dark">No customer data available.</div>
+                                <div className="text-center text-white-dark">{t('db_no_customer_data')}</div>
                             )}
                         </div>
                     </div>
 
                     <div className="panel text-sm text-white-dark">
-                        Sales invoices: {summary.kpis.invoice_counts.sales} · Purchase vouchers: {summary.kpis.invoice_counts.purchases}
+                        {t('db_footer_sales_invoices')} {summary.kpis.invoice_counts.sales} · {t('db_footer_purchase_vouchers')}{' '}
+                        {summary.kpis.invoice_counts.purchases}
                     </div>
                 </>
             )}

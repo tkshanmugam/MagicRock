@@ -8,8 +8,10 @@ import Swal from 'sweetalert2';
 import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { getTranslation } from '@/i18n';
 
 const ComponentsAppsRoles = () => {
+    const { t } = getTranslation();
     const [loading, setLoading] = useState<boolean>(false);
     const [search, setSearch] = useState<string>('');
     const [rolesList, setRolesList] = useState<any[]>([]);
@@ -233,9 +235,9 @@ const ComponentsAppsRoles = () => {
                         <table className="table-striped table-hover">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Name</th>
-                                    <th className="!text-center">Actions</th>
+                                    <th>{t('th_id')}</th>
+                                    <th>{t('th_name')}</th>
+                                    <th className="!text-center">{t('th_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>

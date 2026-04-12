@@ -2,14 +2,19 @@
 Audit log endpoints.
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, delete
 from app.db.session import get_db
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.models.organisation import Organisation
-from app.api.schemas import AuditLogItem, AuditLogListResponse
+from app.api.schemas import (
+    AuditLogItem,
+    AuditLogListResponse,
+    AuditLogBulkDeleteRequest,
+    AuditLogBulkDeleteResponse,
+)
 from app.api.dependencies import require_admin
 from datetime import datetime
 
@@ -93,6 +98,27 @@ async def get_audit_logs(
     return AuditLogListResponse(total=total, items=items)
 
 
+@router.post("/bulk-delete", response_model=AuditLogBulkDeleteResponse)
+async def bulk_delete_audit_logs(
+    body: AuditLogBulkDeleteRequest,
+    _=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete multiple audit logs by ID (Admin only)."""
+    if not body.ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No ids provided")
+    unique_ids = list(dict.fromkeys(body.ids))
+    if len(unique_ids) > 2000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Too many ids (max 2000 per request)",
+        )
+    result = await db.execute(delete(AuditLog).where(AuditLog.id.in_(unique_ids)))
+    await db.commit()
+    deleted = result.rowcount or 0
+    return AuditLogBulkDeleteResponse(deleted=deleted)
+
+
 @router.get("/{log_id}", response_model=AuditLogItem)
 async def get_audit_log(
     log_id: int,
@@ -127,4 +153,19 @@ async def get_audit_log(
         remarks=log.remarks,
         created_date=log.created_date,
     )
+
+
+@router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_audit_log(
+    log_id: int,
+    _=Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a single audit log by ID (Admin only)."""
+    log = await db.get(AuditLog, log_id)
+    if not log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit log not found")
+    await db.delete(log)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 

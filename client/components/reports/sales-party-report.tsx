@@ -10,7 +10,22 @@ import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { exportToCsv } from '@/lib/exportUtils';
+import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
 import { fetchSalesPartyReport, SalesPartyReportItem, SalesPartyReportSummary } from '@/lib/reportApi';
+import { getTranslation } from '@/i18n';
+
+/** Period display: DD-MM-YYYY from HTML date input value (YYYY-MM-DD). */
+function formatIsoDateDdMmYyyy(isoDate: string): string {
+    if (!isoDate?.trim()) {
+        return '';
+    }
+    const parts = isoDate.split('-').map(Number);
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+        return isoDate;
+    }
+    const [y, m, d] = parts;
+    return `${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}`;
+}
 
 const DataTable = dynamic<DataTableProps<SalesPartyReportItem>>(() => import('mantine-datatable').then((mod) => mod.DataTable), {
     ssr: false,
@@ -22,6 +37,7 @@ const DataTable = dynamic<DataTableProps<SalesPartyReportItem>>(() => import('ma
 });
 
 const SalesPartyReport = () => {
+    const { t } = getTranslation();
     const reportRef = useRef<HTMLDivElement | null>(null);
     const canViewReports = organizationContext.hasPermission('Reports', 'view');
     const [isSuperAdmin, setIsSuperAdmin] = useState(organizationContext.getIsSuperAdmin());
@@ -36,8 +52,8 @@ const SalesPartyReport = () => {
 
     const [statusFilter, setStatusFilter] = useState<string>('');
     const [invoiceTypeFilter, setInvoiceTypeFilter] = useState<string>('');
-    const [startDate, setStartDate] = useState<string>('');
-    const [endDate, setEndDate] = useState<string>('');
+    const [startDate, setStartDate] = useState<string>(() => getCurrentMonthDateRange().start);
+    const [endDate, setEndDate] = useState<string>(() => getCurrentMonthDateRange().end);
     const [partySearch, setPartySearch] = useState('');
 
     const [page, setPage] = useState(1);
@@ -140,6 +156,21 @@ const SalesPartyReport = () => {
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
 
+    const reportPeriodLine = useMemo(() => {
+        const from = formatIsoDateDdMmYyyy(startDate);
+        const to = formatIsoDateDdMmYyyy(endDate);
+        if (startDate && endDate) {
+            return `${from} to ${to}`;
+        }
+        if (startDate) {
+            return `From ${from}`;
+        }
+        if (endDate) {
+            return `Up to ${to}`;
+        }
+        return 'All dates';
+    }, [startDate, endDate]);
+
     const fetchReport = useCallback(async () => {
         if (!organisationId) {
             return;
@@ -192,6 +223,47 @@ const SalesPartyReport = () => {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
+            onclone: (_doc, clonedEl) => {
+                clonedEl.style.backgroundColor = '#ffffff';
+
+                clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
+                    if (node instanceof HTMLElement) {
+                        node.style.overflow = 'visible';
+                        node.style.height = 'auto';
+                        node.style.maxHeight = 'none';
+                    }
+                });
+                clonedEl.querySelectorAll('.mantine-ScrollArea-viewport').forEach((node) => {
+                    if (node instanceof HTMLElement) {
+                        node.style.overflow = 'visible';
+                        node.style.height = 'auto';
+                        node.style.maxHeight = 'none';
+                    }
+                });
+
+                clonedEl.style.border = '1px solid rgb(148, 163, 184)';
+                clonedEl.style.borderRadius = '8px';
+
+                const table = clonedEl.querySelector('table');
+                if (table instanceof HTMLElement) {
+                    table.style.borderCollapse = 'collapse';
+                }
+                clonedEl.querySelectorAll('table th, table td').forEach((cell) => {
+                    if (cell instanceof HTMLElement) {
+                        cell.style.border = '1px solid rgb(100, 116, 139)';
+                    }
+                });
+                clonedEl.querySelectorAll('table thead th').forEach((th) => {
+                    if (th instanceof HTMLElement) {
+                        th.style.backgroundColor = 'rgb(203, 213, 225)';
+                        th.style.color = 'rgb(2, 6, 23)';
+                    }
+                });
+
+                clonedEl.querySelectorAll('.sales-party-pdf-hide').forEach((node) => {
+                    (node as HTMLElement).style.display = 'none';
+                });
+            },
         });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -234,7 +306,7 @@ const SalesPartyReport = () => {
     }
 
     return (
-        <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
+        <div className="sales-party-report-page-view panel border-white-light px-0 dark:border-[#1b2e4b]">
             <div className="px-5 pt-5 print:hidden">
                 <div className="flex flex-wrap items-center gap-3">
                     <button type="button" className="btn btn-primary gap-2" onClick={downloadPdf}>
@@ -245,112 +317,122 @@ const SalesPartyReport = () => {
                     </button>
                 </div>
             </div>
-            <div ref={reportRef} className="invoice-table">
-                <div className="px-5 pt-6 text-center">
-                    <div className="text-2xl font-bold uppercase tracking-wide text-black dark:text-white">Sales by Party</div>
-                    <div className="mt-2 text-sm font-semibold text-gray-700">
-                        {selectedOrganisationLabel}
-                        {startDate || endDate ? ` • ${startDate || '...'} to ${endDate || '...'}` : ''}
-                    </div>
-                </div>
-                <div className="px-5 pt-3">
-                    <div className="h-px w-full bg-gray-200" />
-                </div>
-                <div className="mb-4.5 flex flex-col gap-5 px-5 pt-5 md:flex-row md:items-center print:hidden">
-                    <div className="flex flex-wrap items-center gap-3">
-                        {organisationsList.length > 1 ? (
-                            <select
-                                id="organisationId"
-                                className="form-select w-full sm:w-64"
-                                value={organisationId}
-                                onChange={(e) => setOrganisationId(e.target.value)}
-                            >
-                                <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
-                                {organisationsList.map((org: any) => (
-                                    <option key={org.id} value={org.id}>
-                                        {org.name}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <input id="organisationId" className="form-input w-full sm:w-64" value={selectedOrganisationLabel} readOnly />
-                        )}
-                        <select className="form-select w-full sm:w-40" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                            <option value="">All Status</option>
-                            <option value="ACTIVE">Active</option>
-                            <option value="CANCELLED">Cancelled</option>
-                        </select>
+            <div className="mb-4.5 flex flex-col gap-5 px-5 pt-5 md:flex-row md:items-center print:hidden">
+                <div className="flex flex-wrap items-center gap-3">
+                    {organisationsList.length > 1 ? (
                         <select
-                            className="form-select w-full sm:w-40"
-                            value={invoiceTypeFilter}
-                            onChange={(e) => setInvoiceTypeFilter(e.target.value)}
+                            id="organisationId"
+                            className="form-select w-full sm:w-64"
+                            value={organisationId}
+                            onChange={(e) => setOrganisationId(e.target.value)}
                         >
-                            <option value="">All Types</option>
-                            <option value="TAX">TAX</option>
-                            <option value="NON_TAX">Non Tax</option>
+                            <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
+                            {organisationsList.map((org: any) => (
+                                <option key={org.id} value={org.id}>
+                                    {org.name}
+                                </option>
+                            ))}
                         </select>
-                        <input type="date" className="form-input w-full sm:w-40" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                        <input type="date" className="form-input w-full sm:w-40" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                        <input
-                            type="text"
-                            className="form-input w-full sm:w-48"
-                            placeholder="Search party..."
-                            value={partySearch}
-                            onChange={(e) => setPartySearch(e.target.value)}
-                        />
+                    ) : (
+                        <input id="organisationId" className="form-input w-full sm:w-64" value={selectedOrganisationLabel} readOnly />
+                    )}
+                    <select className="form-select w-full sm:w-40" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                        <option value="">All Status</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="CANCELLED">Cancelled</option>
+                    </select>
+                    <select
+                        className="form-select w-full sm:w-40"
+                        value={invoiceTypeFilter}
+                        onChange={(e) => setInvoiceTypeFilter(e.target.value)}
+                    >
+                        <option value="">All Types</option>
+                        <option value="TAX">TAX</option>
+                        <option value="NON_TAX">Non Tax</option>
+                    </select>
+                    <input type="date" className="form-input w-full sm:w-40" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    <input type="date" className="form-input w-full sm:w-40" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    <input
+                        type="text"
+                        className="form-input w-full sm:w-48"
+                        placeholder="Search party..."
+                        value={partySearch}
+                        onChange={(e) => setPartySearch(e.target.value)}
+                    />
+                </div>
+            </div>
+
+            <div
+                ref={reportRef}
+                className="invoice-table w-full min-w-0 rounded-lg bg-white text-base text-gray-900 shadow-sm dark:bg-black dark:text-white"
+            >
+                <div className="border-b border-slate-500 px-5 pb-6 pt-6 text-center dark:border-slate-500">
+                    <div className="text-3xl font-bold uppercase tracking-wide text-black dark:text-white">Sales by Party</div>
+                    <div className="mt-3 text-lg font-bold text-gray-900 dark:text-white">{selectedOrganisationLabel}</div>
+                    <div className="mt-2 text-base text-gray-700 dark:text-gray-300">
+                        <span className="font-semibold text-gray-900 dark:text-white">Period: </span>
+                        {reportPeriodLine}
                     </div>
                 </div>
 
-                <div className="grid gap-4 px-5 pb-5 md:grid-cols-3">
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Total Taxable Amount</div>
-                        <div className="mt-2 text-xl font-semibold">{totals.taxable}</div>
+                <div className="grid gap-4 px-5 py-5 md:grid-cols-3">
+                    <div className="sales-party-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-base text-gray-500 dark:text-gray-400">Total Taxable Amount</div>
+                        <div className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{totals.taxable}</div>
                     </div>
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Total Tax Amount</div>
-                        <div className="mt-2 text-xl font-semibold">{totals.tax}</div>
+                    <div className="sales-party-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-base text-gray-500 dark:text-gray-400">Total Tax Amount</div>
+                        <div className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{totals.tax}</div>
                     </div>
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Total Invoice Amount</div>
-                        <div className="mt-2 text-xl font-semibold">{totals.invoice}</div>
+                    <div className="sales-party-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-base text-gray-500 dark:text-gray-400">Total Invoice Amount</div>
+                        <div className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{totals.invoice}</div>
                     </div>
                 </div>
 
-                <div className="datatables pagination-padding px-5 pb-5">
+                <div className="sales-party-datatable-wrap datatables pagination-padding px-5 pb-5">
                     <DataTable
                         className="table-hover whitespace-nowrap"
+                        withBorder
+                        withColumnBorders
+                        borderColor="#64748b"
+                        borderRadius="sm"
+                        fontSize="md"
+                        horizontalSpacing="md"
+                        verticalSpacing="sm"
+                        classNames={{ pagination: 'sales-party-pdf-hide' }}
                         records={records}
                         columns={[
                             {
                                 accessor: 'party_name',
-                                title: 'Party Name',
+                                title: t('th_party_name'),
                                 sortable: true,
                                 render: ({ party_name }) => <div className="font-semibold">{party_name || '-'}</div>,
                             },
                             {
                                 accessor: 'invoice_count',
-                                title: 'Invoices',
+                                title: t('th_invoices'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ invoice_count }) => <div className="text-right">{Number(invoice_count || 0)}</div>,
                             },
                             {
                                 accessor: 'taxable_amount',
-                                title: 'Taxable Amount',
+                                title: t('th_taxable_amount'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ taxable_amount }) => <div className="text-right">{Number(taxable_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'tax_amount',
-                                title: 'Tax Amount',
+                                title: t('th_tax_amount'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ tax_amount }) => <div className="text-right">{Number(tax_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'invoice_total',
-                                title: 'Invoice Total',
+                                title: t('th_invoice_total'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ invoice_total }) => <div className="text-right font-semibold">{Number(invoice_total || 0).toFixed(2)}</div>,
@@ -366,7 +448,7 @@ const SalesPartyReport = () => {
                         sortStatus={sortStatus}
                         onSortStatusChange={setSortStatus}
                     />
-                    {loading && <div className="px-5 py-3 text-sm text-gray-500">Loading sales party report...</div>}
+                    {loading && <div className="px-5 py-3 text-base text-gray-500">Loading sales party report...</div>}
                 </div>
             </div>
         </div>

@@ -4,8 +4,10 @@ import Swal from 'sweetalert2';
 import { apiDelete, apiGet, apiPut } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { getTranslation } from '@/i18n';
 
 const ComponentsAppsRolePermissions = () => {
+    const { t } = getTranslation();
     const [rolesList, setRolesList] = useState<any[]>([]);
     const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
     const [permissionsLoading, setPermissionsLoading] = useState<boolean>(false);
@@ -275,12 +277,12 @@ const ComponentsAppsRolePermissions = () => {
                         <table className="table-striped table-hover">
                             <thead>
                                 <tr>
-                                    <th>Module</th>
-                                    <th className="!text-center">View</th>
-                                    <th className="!text-center">Create</th>
-                                    <th className="!text-center">Update</th>
-                                    <th className="!text-center">Delete</th>
-                                    <th className="!text-center">Actions</th>
+                                    <th>{t('th_module')}</th>
+                                    <th className="!text-center">{t('th_view')}</th>
+                                    <th className="!text-center">{t('th_create')}</th>
+                                    <th className="!text-center">{t('th_update')}</th>
+                                    <th className="!text-center">{t('th_delete')}</th>
+                                    <th className="!text-center">{t('th_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>

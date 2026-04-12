@@ -11,10 +11,21 @@ import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard';
 import IconCaretDown from '@/components/icon/icon-caret-down';
 import IconMinus from '@/components/icon/icon-minus';
 import IconMenuInvoice from '@/components/icon/menu/icon-menu-invoice';
-import IconMenuApps from '@/components/icon/menu/icon-menu-apps';
 import IconMenuUsers from '@/components/icon/menu/icon-menu-users';
+import IconMenuCharts from '@/components/icon/menu/icon-menu-charts';
+import IconMenuContacts from '@/components/icon/menu/icon-menu-contacts';
+import IconMenuComponents from '@/components/icon/menu/icon-menu-components';
 import IconUsersGroup from '@/components/icon/icon-users-group';
 import IconUsers from '@/components/icon/icon-users';
+import IconUser from '@/components/icon/icon-user';
+import IconShoppingCart from '@/components/icon/icon-shopping-cart';
+import IconShoppingBag from '@/components/icon/icon-shopping-bag';
+import IconTag from '@/components/icon/icon-tag';
+import IconClipboardText from '@/components/icon/icon-clipboard-text';
+import IconDollarSignCircle from '@/components/icon/icon-dollar-sign-circle';
+import IconCalendar from '@/components/icon/icon-calendar';
+import IconLockDots from '@/components/icon/icon-lock-dots';
+import IconLink from '@/components/icon/icon-link';
 import { usePathname } from 'next/navigation';
 import { getTranslation } from '@/i18n';
 import { organizationContext } from '@/lib/organizationContext';
@@ -34,6 +45,7 @@ const Sidebar = () => {
     const canViewRolePermissions = organizationContext.hasPermission('Role Permissions', 'view');
     const canViewTaxSettings = organizationContext.hasPermission('TSettings', 'view');
     const canViewSales = organizationContext.hasPermission('Sales', 'view');
+    const canViewCustomers = organizationContext.hasPermission('Customers', 'view');
     const canViewPurchase = organizationContext.hasPermission('Purchase', 'view');
     const canViewReports = organizationContext.hasPermission('Reports', 'view');
     const canViewAuditLogs = organizationContext.getIsSuperAdmin() || organizationContext.hasPermission('Audit', 'view');
@@ -118,10 +130,12 @@ const Sidebar = () => {
                 className={`sidebar fixed bottom-0 top-0 z-50 h-full min-h-screen w-[260px] shadow-[5px_0_25px_0_rgba(94,92,154,0.1)] transition-all duration-300 ${semidark ? 'text-white-dark' : ''}`}
             >
                 <div className="h-full bg-white dark:bg-black">
-                    <div className="flex items-center justify-between px-4 py-3">
-                        <Link href="/" className="main-logo flex shrink-0 items-center">
-                            <img className="ml-[5px] w-8 flex-none" src="/assets/images/logo.svg" alt="logo" />
-                            <span className="align-middle text-2xl font-semibold ltr:ml-1.5 rtl:mr-1.5 dark:text-white-light lg:inline">BizLedger</span>
+                    <div className="flex items-center justify-between gap-2 px-4 py-3">
+                        <Link href="/" className="main-logo flex min-w-0 flex-1 items-center gap-2">
+                            <img className="h-8 w-8 shrink-0" src="/assets/images/logo.svg" alt="Kumaran Coconuts" />
+                            <span className="min-w-0 text-left text-lg font-semibold leading-snug text-black dark:text-white-light lg:inline">
+                                Kumaran Coconuts
+                            </span>
                         </Link>
 
                         <button
@@ -137,7 +151,7 @@ const Sidebar = () => {
                             <li className="menu nav-item">
                                 <Link href="/finance" className="nav-link group w-full">
                                     <div className="flex items-center">
-                                        <IconMenuDashboard className="shrink-0 group-hover:!text-primary" />
+                                        <IconMenuDashboard className="h-5 w-5 shrink-0 group-hover:!text-primary" />
                                         <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('dashboard')}</span>
                                     </div>
                                 </Link>
@@ -145,7 +159,7 @@ const Sidebar = () => {
 
                             <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
                                 <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>Voucher</span>
+                                <span>{t('Voucher')}</span>
                             </h2>
 
                             <li className="nav-item">
@@ -154,74 +168,74 @@ const Sidebar = () => {
                                         {renderNavItem(t('Sales'), '/apps/invoice/list', IconMenuInvoice, canViewSales)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem(t('Purchase'), '/apps/purchase/list', IconMenuInvoice, canViewPurchase)}
+                                        {renderNavItem(t('Purchase'), '/apps/purchase/list', IconShoppingCart, canViewPurchase)}
                                     </li>
                                 </ul>
                             </li>
 
                             <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
                                 <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>Organisation</span>
+                                <span>{t('Organisation')}</span>
                             </h2>
 
                             <li className="nav-item">
                                 <ul className="space-y-1">
                                     <li className="nav-item">
-                                        {renderNavItem(t('Organisation'), '/apps/organisation', IconMenuApps, canViewOrganizations)}
+                                        {renderNavItem(t('Organisation'), '/apps/organisation', IconMenuContacts, canViewOrganizations)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem('Customers', '/apps/customers/list', IconUsersGroup, true)}
+                                        {renderNavItem(t('Customers'), '/apps/customers/list', IconUsersGroup, canViewCustomers)}
                                     </li>
                                 </ul>
                             </li>
 
                             <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
                                 <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>Settings</span>
+                                <span>{t('Settings')}</span>
                             </h2>
 
                             <li className="nav-item">
                                 <ul className="space-y-1">
                                     <li className="nav-item">
-                                        {renderNavItem(t('Tax'), '/apps/tsettings', IconMenuApps, canViewTaxSettings)}
+                                        {renderNavItem(t('Tax'), '/apps/tsettings', IconTag, canViewTaxSettings)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem('Audit Logs', '/apps/audit-logs', IconMenuApps, canViewAuditLogs)}
+                                        {renderNavItem(t('Audit Logs'), '/apps/audit-logs', IconClipboardText, canViewAuditLogs)}
                                     </li>
                                 </ul>
                             </li>
 
                             <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
                                 <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>Reports</span>
+                                <span>{t('Reports')}</span>
                             </h2>
 
                             <li className="nav-item">
                                 <ul className="space-y-1">
                                     <li className="nav-item">
-                                        {renderNavItem('Sales Report', '/apps/reports/sales', IconMenuInvoice, canViewReports)}
+                                        {renderNavItem(t('Sales Report'), '/apps/reports/sales', IconMenuCharts, canViewReports)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem('Sales by Party', '/apps/reports/sales-party', IconMenuInvoice, canViewReports)}
+                                        {renderNavItem(t('Sales by Party'), '/apps/reports/sales-party', IconUser, canViewReports)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem('Purchase Report', '/apps/reports/purchase', IconMenuInvoice, canViewReports)}
+                                        {renderNavItem(t('Purchase Report'), '/apps/reports/purchase', IconShoppingBag, canViewReports)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem('Purchase by Party', '/apps/reports/purchase-party', IconMenuInvoice, canViewReports)}
+                                        {renderNavItem(t('Purchase by Party'), '/apps/reports/purchase-party', IconUsers, canViewReports)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem('GST Summary', '/apps/reports/tax', IconMenuInvoice, canViewReports)}
+                                        {renderNavItem(t('GST Summary'), '/apps/reports/tax', IconDollarSignCircle, canViewReports)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem('GST Summary (Monthly)', '/apps/reports/gst-summary-monthly', IconMenuInvoice, canViewReports)}
+                                        {renderNavItem(t('GST Summary (Monthly)'), '/apps/reports/gst-summary-monthly', IconCalendar, canViewReports)}
                                     </li>
                                 </ul>
                             </li>
 
                             <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
                                 <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>User</span>
+                                <span>{t('User')}</span>
                             </h2>
 
                             <li className="nav-item">
@@ -230,13 +244,13 @@ const Sidebar = () => {
                                         {renderNavItem(t('Users'), '/apps/user', IconMenuUsers, canViewUsers)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem(t('Roles'), '/apps/roles', IconUsersGroup, canViewRoles)}
+                                        {renderNavItem(t('Roles'), '/apps/roles', IconLockDots, canViewRoles)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem(t('Role Permissions'), '/apps/role-permissions', IconUsers, canViewRolePermissions)}
+                                        {renderNavItem(t('Role Permissions'), '/apps/role-permissions', IconLink, canViewRolePermissions)}
                                     </li>
                                     <li className="nav-item">
-                                        {renderNavItem(t('Modules'), '/apps/modules', IconMenuApps, canViewModules)}
+                                        {renderNavItem(t('Modules'), '/apps/modules', IconMenuComponents, canViewModules)}
                                     </li>
                                 </ul>
                             </li>

@@ -96,6 +96,15 @@ class AuditLogListResponse(BaseModel):
     items: List[AuditLogItem]
 
 
+class AuditLogBulkDeleteRequest(BaseModel):
+    """Bulk delete audit log rows by ID."""
+    ids: List[int]
+
+
+class AuditLogBulkDeleteResponse(BaseModel):
+    deleted: int
+
+
 # Organisation Schemas
 class OrganisationBase(BaseModel):
     """Base organisation schema."""
@@ -330,6 +339,110 @@ class TaxConfigurationUpdate(BaseModel):
 
 
 class TaxConfigurationResponse(TaxConfigurationBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Customer master (global directory; one row per GSTIN)
+class CustomerBase(BaseModel):
+    name: str
+    address: Optional[str] = None
+    state: Optional[str] = None
+    state_code: Optional[str] = None
+    gstin: str
+    contact_no: Optional[str] = None
+
+    @validator("name")
+    def validate_name(cls, value: str) -> str:
+        stripped = (value or "").strip()
+        if not stripped:
+            raise ValueError("Name is required")
+        return stripped
+
+    @validator("gstin")
+    def validate_gstin(cls, value: str) -> str:
+        stripped = (value or "").strip().upper()
+        if not stripped:
+            raise ValueError("GSTIN is required")
+        if len(stripped) > 50:
+            raise ValueError("GSTIN must be at most 50 characters")
+        return stripped
+
+    @validator("address", "state", "contact_no")
+    def optional_strings(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip()
+        return s or None
+
+    @validator("state_code")
+    def optional_state_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip()
+        if not s:
+            return None
+        if len(s) > 100:
+            raise ValueError("state_code must be at most 100 characters")
+        return s
+
+
+class CustomerCreate(CustomerBase):
+    pass
+
+
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    state: Optional[str] = None
+    state_code: Optional[str] = None
+    gstin: Optional[str] = None
+    contact_no: Optional[str] = None
+
+    @validator("name")
+    def update_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip()
+        if not s:
+            raise ValueError("Name cannot be empty")
+        return s
+
+    @validator("gstin")
+    def update_gstin(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip().upper()
+        if not s:
+            raise ValueError("GSTIN cannot be empty")
+        if len(s) > 50:
+            raise ValueError("GSTIN must be at most 50 characters")
+        return s
+
+    @validator("address", "state", "contact_no")
+    def strip_optional(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip()
+        return s or None
+
+    @validator("state_code")
+    def strip_state_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        s = value.strip()
+        if not s:
+            return None
+        if len(s) > 100:
+            raise ValueError("state_code must be at most 100 characters")
+        return s
+
+
+class CustomerResponse(CustomerBase):
     id: int
     created_at: datetime
     updated_at: datetime

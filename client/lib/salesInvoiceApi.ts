@@ -33,7 +33,6 @@ export type SalesInvoiceItem = SalesInvoiceItemPayload & {
     total_amount: number;
 };
 
-
 export type OrganisationShareProfile = {
     id: number;
     name: string;
@@ -53,7 +52,6 @@ export type OrganisationShareProfile = {
     upi_id?: string | null;
 };
 
-
 export type SalesInvoice = Omit<SalesInvoicePayload, 'items' | 'invoice_number'> & {
     invoice_number: string;
     id: number;
@@ -72,12 +70,10 @@ export type SalesInvoice = Omit<SalesInvoicePayload, 'items' | 'invoice_number'>
     organisation_profile?: OrganisationShareProfile | null;
 };
 
-
 export type SalesInvoiceListResponse = {
     total: number;
     items: SalesInvoice[];
 };
-
 
 export const createSalesInvoice = (payload: SalesInvoicePayload) =>
     apiPost<SalesInvoice>('sales-invoices', payload);
@@ -88,6 +84,7 @@ export const updateSalesInvoice = (id: number, payload: Partial<SalesInvoicePayl
 export const fetchSalesInvoice = (id: number) =>
     apiGet<SalesInvoice>(`sales-invoices/${id}`);
 
+/** Public shared link preview — no login; includes organisation_profile for letterhead. */
 export const fetchSalesInvoiceForShare = (id: number) =>
     apiGet<SalesInvoice>(`sales-invoices/share/${id}`);
 

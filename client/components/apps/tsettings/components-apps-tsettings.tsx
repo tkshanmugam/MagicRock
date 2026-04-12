@@ -9,6 +9,7 @@ import Swal from 'sweetalert2';
 import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { getTranslation } from '@/i18n';
 
 type TaxSetting = {
     id: number;
@@ -19,6 +20,7 @@ type TaxSetting = {
 };
 
 const ComponentsAppsTSettings = () => {
+    const { t } = getTranslation();
     const [addTaxModal, setAddTaxModal] = useState<boolean>(false);
     const [loading, setLoading] = useState<boolean>(false);
     const [saving, setSaving] = useState<boolean>(false);
@@ -315,10 +317,10 @@ const ComponentsAppsTSettings = () => {
                         <table className="table-striped table-hover">
                             <thead>
                                 <tr>
-                                    <th>Organisation</th>
-                                    <th>SGST %</th>
-                                    <th>CGST %</th>
-                                    <th className="!text-center">Actions</th>
+                                    <th>{t('th_organisation')}</th>
+                                    <th>{t('th_sgst_pct')}</th>
+                                    <th>{t('th_cgst_pct')}</th>
+                                    <th className="!text-center">{t('th_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>

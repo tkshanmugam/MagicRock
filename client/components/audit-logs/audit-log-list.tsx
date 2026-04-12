@@ -1,26 +1,29 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState, Fragment } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, Fragment, type ComponentType } from 'react';
 import dynamic from 'next/dynamic';
 import type { DataTableProps, DataTableSortStatus } from 'mantine-datatable';
 import { Dialog, DialogPanel, Transition, TransitionChild } from '@headlessui/react';
+import Swal from 'sweetalert2';
 
 import IconEye from '@/components/icon/icon-eye';
+import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconX from '@/components/icon/icon-x';
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { exportToCsv } from '@/lib/exportUtils';
-import { fetchAuditLog, fetchAuditLogs, AuditLogItem } from '@/lib/auditLogApi';
+import { fetchAuditLog, fetchAuditLogs, deleteAuditLog, bulkDeleteAuditLogs, AuditLogItem } from '@/lib/auditLogApi';
+import { getTranslation } from '@/i18n';
 
-const DataTable = dynamic<DataTableProps<AuditLogItem>>(() => import('mantine-datatable').then((mod) => mod.DataTable), {
+const DataTable = dynamic(() => import('mantine-datatable').then((mod) => mod.DataTable), {
     ssr: false,
     loading: () => (
         <div className="panel mt-5">
             <div className="text-center py-8">Loading audit logs...</div>
         </div>
     ),
-});
+}) as ComponentType<DataTableProps<AuditLogItem>>;
 
 const ACTION_OPTIONS = ['CREATE', 'UPDATE', 'DELETE', 'CANCEL', 'LOGIN', 'LOGOUT'];
 const MODULE_OPTIONS = ['Authentication', 'User', 'Sales', 'Purchase', 'Settings'];
@@ -32,7 +35,9 @@ type UserOption = {
 };
 
 const AuditLogList = () => {
+    const { t } = getTranslation();
     const canViewAudit = organizationContext.getIsSuperAdmin() || organizationContext.hasPermission('Audit', 'view');
+    const canDeleteAudit = organizationContext.getIsSuperAdmin() || organizationContext.hasPermission('Audit', 'delete');
     const [records, setRecords] = useState<AuditLogItem[]>([]);
     const [totalRecords, setTotalRecords] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -56,6 +61,7 @@ const AuditLogList = () => {
 
     const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
+    const [selectedRecords, setSelectedRecords] = useState<AuditLogItem[]>([]);
 
     const fetchUsers = useCallback(async () => {
         if (!authState.isAuthStateReady()) {
@@ -130,6 +136,10 @@ const AuditLogList = () => {
         setPage(1);
     }, [pageSize, actionFilter, moduleFilter, userFilter, organisationFilter, startDate, endDate]);
 
+    useEffect(() => {
+        setSelectedRecords([]);
+    }, [page, pageSize, actionFilter, moduleFilter, userFilter, organisationFilter, startDate, endDate]);
+
     const openDetail = async (logId: number) => {
         try {
             const response = await fetchAuditLog(logId);
@@ -137,6 +147,90 @@ const AuditLogList = () => {
             setModalOpen(true);
         } catch (error) {
             console.error('Failed to fetch audit log details', error);
+        }
+    };
+
+    const removeFromSelection = (id: number) => {
+        setSelectedRecords((prev) => prev.filter((r) => r.id !== id));
+    };
+
+    const handleDeleteOne = async (log: AuditLogItem) => {
+        const result = await Swal.fire({
+            icon: 'warning',
+            title: 'Delete audit log?',
+            text: 'This removes the log entry permanently. It cannot be undone.',
+            showCancelButton: true,
+            confirmButtonText: 'Delete',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#d33',
+        });
+        if (!result.isConfirmed) {
+            return;
+        }
+        try {
+            await deleteAuditLog(log.id);
+            removeFromSelection(log.id);
+            if (selectedLog?.id === log.id) {
+                setModalOpen(false);
+                setSelectedLog(null);
+            }
+            void Swal.fire({
+                icon: 'success',
+                title: 'Deleted',
+                text: 'Audit log entry removed.',
+                timer: 2000,
+                showConfirmButton: false,
+            });
+            fetchLogs();
+        } catch (error) {
+            console.error('Failed to delete audit log', error);
+            void Swal.fire({
+                icon: 'error',
+                title: 'Delete failed',
+                text: error instanceof Error ? error.message : 'Could not delete this entry.',
+            });
+        }
+    };
+
+    const handleDeleteSelected = async () => {
+        if (!selectedRecords.length) {
+            return;
+        }
+        const ids = selectedRecords.map((r) => r.id);
+        const result = await Swal.fire({
+            icon: 'warning',
+            title: `Delete ${ids.length} log${ids.length === 1 ? '' : 's'}?`,
+            text: 'Selected audit log entries will be removed permanently.',
+            showCancelButton: true,
+            confirmButtonText: 'Delete all',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#d33',
+        });
+        if (!result.isConfirmed) {
+            return;
+        }
+        try {
+            await bulkDeleteAuditLogs(ids);
+            if (selectedLog && ids.includes(selectedLog.id)) {
+                setModalOpen(false);
+                setSelectedLog(null);
+            }
+            setSelectedRecords([]);
+            void Swal.fire({
+                icon: 'success',
+                title: 'Deleted',
+                text: 'Selected entries removed.',
+                timer: 2000,
+                showConfirmButton: false,
+            });
+            fetchLogs();
+        } catch (error) {
+            console.error('Failed to bulk delete audit logs', error);
+            void Swal.fire({
+                icon: 'error',
+                title: 'Delete failed',
+                text: error instanceof Error ? error.message : 'Could not delete selected entries.',
+            });
         }
     };
 
@@ -178,10 +272,18 @@ const AuditLogList = () => {
 
     return (
         <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
+            <div className="border-b border-white-light px-5 pb-4 pt-5 dark:border-[#1b2e4b]">
+                <h1 className="text-2xl font-bold text-black dark:text-white-light">Audit Logs</h1>
+            </div>
             <div className="mb-4 flex flex-wrap items-center gap-3 px-5 pt-5">
                 <button type="button" className="btn btn-success gap-2" onClick={exportCsv}>
                     Export CSV
                 </button>
+                {canDeleteAudit && selectedRecords.length > 0 && (
+                    <button type="button" className="btn btn-danger gap-2" onClick={() => void handleDeleteSelected()}>
+                        Delete selected ({selectedRecords.length})
+                    </button>
+                )}
                 <div className="ml-auto flex flex-wrap items-center gap-3">
                     <select className="form-select w-full sm:w-44" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
                         <option value="">All Modules</option>
@@ -226,58 +328,75 @@ const AuditLogList = () => {
 
             <div className="datatables pagination-padding px-5 pb-5">
                 <DataTable
-                    className="table-hover whitespace-nowrap"
-                    records={records}
-                    columns={[
-                        {
-                            accessor: 'created_date',
-                            title: 'Date & Time',
-                            sortable: true,
-                            render: ({ created_date }) => <div>{new Date(created_date).toLocaleString()}</div>,
-                        },
-                        {
-                            accessor: 'user_name',
-                            title: 'User',
-                            sortable: true,
-                            render: ({ user_name }) => <div className="font-semibold">{user_name || 'System'}</div>,
-                        },
-                        { accessor: 'module_name', title: 'Module', sortable: true },
-                        { accessor: 'action', title: 'Action', sortable: true },
-                        {
-                            accessor: 'entity_name',
-                            title: 'Entity',
-                            sortable: true,
-                            render: ({ entity_name, entity_id }) => (
-                                <div>
-                                    {entity_name || '-'}
-                                    {entity_id ? ` #${entity_id}` : ''}
-                                </div>
-                            ),
-                        },
-                        { accessor: 'ip_address', title: 'IP Address', sortable: true },
-                        { accessor: 'organisation_name', title: 'Organisation', sortable: true },
-                        {
-                            accessor: 'actions',
-                            title: 'Details',
-                            sortable: false,
-                            textAlignment: 'center',
-                            render: ({ id }) => (
-                                <button type="button" className="text-primary hover:text-info" onClick={() => openDetail(id)}>
-                                    <IconEye />
-                                </button>
-                            ),
-                        },
-                    ]}
-                    highlightOnHover
-                    totalRecords={totalRecords}
-                    recordsPerPage={pageSize}
-                    page={page}
-                    onPageChange={(p) => setPage(p)}
-                    recordsPerPageOptions={PAGE_SIZES}
-                    onRecordsPerPageChange={setPageSize}
-                    sortStatus={sortStatus}
-                    onSortStatusChange={setSortStatus}
-                    paginationText={({ from, to, totalRecords }) => `Showing ${from} to ${to} of ${totalRecords} entries`}
+                    {...({
+                        withBorder: false,
+                        className: 'table-hover whitespace-nowrap',
+                        records,
+                        columns: [
+                            {
+                                accessor: 'created_date',
+                                title: t('th_date_time'),
+                                sortable: true,
+                                render: ({ created_date }) => <div>{new Date(created_date).toLocaleString()}</div>,
+                            },
+                            {
+                                accessor: 'user_name',
+                                title: t('th_user'),
+                                sortable: true,
+                                render: ({ user_name }) => <div className="font-semibold">{user_name || 'System'}</div>,
+                            },
+                            { accessor: 'module_name', title: t('th_module'), sortable: true },
+                            { accessor: 'action', title: t('th_action'), sortable: true },
+                            {
+                                accessor: 'entity_name',
+                                title: t('th_entity'),
+                                sortable: true,
+                                render: ({ entity_name, entity_id }) => (
+                                    <div>
+                                        {entity_name || '-'}
+                                        {entity_id ? ` #${entity_id}` : ''}
+                                    </div>
+                                ),
+                            },
+                            { accessor: 'ip_address', title: t('th_ip_address'), sortable: true },
+                            { accessor: 'organisation_name', title: t('th_organisation'), sortable: true },
+                            {
+                                accessor: 'actions',
+                                title: t('th_actions'),
+                                sortable: false,
+                                textAlignment: 'center',
+                                render: (row) => (
+                                    <div className="mx-auto flex w-max items-center justify-center gap-3">
+                                        <button type="button" className="text-primary hover:text-info" title="View details" onClick={() => openDetail(row.id)}>
+                                            <IconEye />
+                                        </button>
+                                        {canDeleteAudit && (
+                                            <button
+                                                type="button"
+                                                className="text-danger hover:text-red-400"
+                                                title="Delete"
+                                                onClick={() => void handleDeleteOne(row)}
+                                            >
+                                                <IconTrashLines className="h-5 w-5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ),
+                            },
+                        ],
+                        highlightOnHover: true,
+                        idAccessor: 'id',
+                        ...(canDeleteAudit ? { selectedRecords, onSelectedRecordsChange: setSelectedRecords } : {}),
+                        totalRecords,
+                        recordsPerPage: pageSize,
+                        page,
+                        onPageChange: (p: number) => setPage(p),
+                        recordsPerPageOptions: PAGE_SIZES,
+                        onRecordsPerPageChange: setPageSize,
+                        sortStatus,
+                        onSortStatusChange: setSortStatus,
+                        paginationText: ({ from, to, totalRecords: tot }) => `Showing ${from} to ${to} of ${tot} entries`,
+                    } as DataTableProps<AuditLogItem>)}
                 />
                 {loading && <div className="px-5 py-3 text-sm text-gray-500">Loading audit logs...</div>}
             </div>

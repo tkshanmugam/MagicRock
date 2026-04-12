@@ -10,7 +10,9 @@ import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { exportToCsv } from '@/lib/exportUtils';
+import { getCurrentMonthYearMonth } from '@/lib/reportDateRange';
 import { fetchGstSummaryMonthlyReport, GstSummaryMonthlyItem, GstSummaryMonthlySummary } from '@/lib/reportApi';
+import { getTranslation } from '@/i18n';
 
 type GstMonthlyTableRecord = GstSummaryMonthlyItem & {
     period_key: number;
@@ -34,6 +36,7 @@ const formatMonthLabel = (year: number, month: number) => {
 };
 
 const GstSummaryMonthlyReport = () => {
+    const { t } = getTranslation();
     const reportRef = useRef<HTMLDivElement | null>(null);
     const canViewReports = organizationContext.hasPermission('Reports', 'view');
     const [isSuperAdmin, setIsSuperAdmin] = useState(organizationContext.getIsSuperAdmin());
@@ -45,8 +48,9 @@ const GstSummaryMonthlyReport = () => {
     const [summary, setSummary] = useState<GstSummaryMonthlySummary | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const [startMonth, setStartMonth] = useState<string>('');
-    const [endMonth, setEndMonth] = useState<string>('');
+    const defaultYearMonth = useMemo(() => getCurrentMonthYearMonth(), []);
+    const [startMonth, setStartMonth] = useState<string>(defaultYearMonth);
+    const [endMonth, setEndMonth] = useState<string>(defaultYearMonth);
 
     const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
         columnAccessor: 'period_key',
@@ -214,6 +218,47 @@ const GstSummaryMonthlyReport = () => {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
+            onclone: (_doc, clonedEl) => {
+                clonedEl.style.backgroundColor = '#ffffff';
+
+                clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
+                    if (node instanceof HTMLElement) {
+                        node.style.overflow = 'visible';
+                        node.style.height = 'auto';
+                        node.style.maxHeight = 'none';
+                    }
+                });
+                clonedEl.querySelectorAll('.mantine-ScrollArea-viewport').forEach((node) => {
+                    if (node instanceof HTMLElement) {
+                        node.style.overflow = 'visible';
+                        node.style.height = 'auto';
+                        node.style.maxHeight = 'none';
+                    }
+                });
+
+                clonedEl.style.border = '1px solid rgb(148, 163, 184)';
+                clonedEl.style.borderRadius = '8px';
+
+                const table = clonedEl.querySelector('table');
+                if (table instanceof HTMLElement) {
+                    table.style.borderCollapse = 'collapse';
+                }
+                clonedEl.querySelectorAll('table th, table td').forEach((cell) => {
+                    if (cell instanceof HTMLElement) {
+                        cell.style.border = '1px solid rgb(100, 116, 139)';
+                    }
+                });
+                clonedEl.querySelectorAll('table thead th').forEach((th) => {
+                    if (th instanceof HTMLElement) {
+                        th.style.backgroundColor = 'rgb(203, 213, 225)';
+                        th.style.color = 'rgb(2, 6, 23)';
+                    }
+                });
+
+                clonedEl.querySelectorAll('.gst-monthly-pdf-hide').forEach((node) => {
+                    (node as HTMLElement).style.display = 'none';
+                });
+            },
         });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -261,7 +306,7 @@ const GstSummaryMonthlyReport = () => {
     }
 
     return (
-        <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
+        <div className="gst-monthly-report-page-view panel border-white-light px-0 dark:border-[#1b2e4b]">
             <div className="px-5 pt-5 print:hidden">
                 <div className="flex flex-wrap items-center gap-3">
                     <button type="button" className="btn btn-primary gap-2" onClick={downloadPdf}>
@@ -272,98 +317,104 @@ const GstSummaryMonthlyReport = () => {
                     </button>
                 </div>
             </div>
-            <div ref={reportRef} className="invoice-table">
-                <div className="px-5 pt-6 text-center">
+            <div className="mb-4.5 flex flex-col gap-5 px-5 pt-5 md:flex-row md:items-center print:hidden">
+                <div className="flex flex-wrap items-center gap-3">
+                    {organisationsList.length > 1 ? (
+                        <select
+                            id="organisationId"
+                            className="form-select w-full sm:w-64"
+                            value={organisationId}
+                            onChange={(e) => setOrganisationId(e.target.value)}
+                        >
+                            <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
+                            {organisationsList.map((org: any) => (
+                                <option key={org.id} value={org.id}>
+                                    {org.name}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input id="organisationId" className="form-input w-full sm:w-64" value={selectedOrganisationLabel} readOnly />
+                    )}
+                    <input type="month" className="form-input w-full sm:w-40" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} />
+                    <input type="month" className="form-input w-full sm:w-40" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} />
+                </div>
+            </div>
+
+            <div
+                ref={reportRef}
+                className="invoice-table w-full min-w-0 rounded-lg bg-white text-gray-900 shadow-sm dark:bg-black dark:text-white"
+            >
+                <div className="border-b border-slate-500 px-5 pb-6 pt-6 text-center dark:border-slate-500">
                     <div className="text-2xl font-bold uppercase tracking-wide text-black dark:text-white">GST Summary (Monthly)</div>
-                    <div className="mt-2 text-sm font-semibold text-gray-700">
+                    <div className="mt-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
                         {selectedOrganisationLabel}
                         {startMonth || endMonth ? ` • ${startMonth || '...'} to ${endMonth || '...'}` : ''}
                     </div>
                 </div>
-                <div className="px-5 pt-3">
-                    <div className="h-px w-full bg-gray-200" />
-                </div>
-                <div className="mb-4.5 flex flex-col gap-5 px-5 pt-5 md:flex-row md:items-center print:hidden">
-                    <div className="flex flex-wrap items-center gap-3">
-                        {organisationsList.length > 1 ? (
-                            <select
-                                id="organisationId"
-                                className="form-select w-full sm:w-64"
-                                value={organisationId}
-                                onChange={(e) => setOrganisationId(e.target.value)}
-                            >
-                                <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
-                                {organisationsList.map((org: any) => (
-                                    <option key={org.id} value={org.id}>
-                                        {org.name}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <input id="organisationId" className="form-input w-full sm:w-64" value={selectedOrganisationLabel} readOnly />
-                        )}
-                        <input type="month" className="form-input w-full sm:w-40" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} />
-                        <input type="month" className="form-input w-full sm:w-40" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} />
+
+                <div className="grid gap-4 px-5 py-5 md:grid-cols-3">
+                    <div className="gst-monthly-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Taxable Amount</div>
+                        <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{totals.taxable}</div>
+                    </div>
+                    <div className="gst-monthly-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Output Tax</div>
+                        <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{totals.output}</div>
+                    </div>
+                    <div className="gst-monthly-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Net Tax Payable</div>
+                        <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{totals.net}</div>
                     </div>
                 </div>
 
-                <div className="grid gap-4 px-5 pb-5 md:grid-cols-3">
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Total Taxable Amount</div>
-                        <div className="mt-2 text-xl font-semibold">{totals.taxable}</div>
-                    </div>
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Total Output Tax</div>
-                        <div className="mt-2 text-xl font-semibold">{totals.output}</div>
-                    </div>
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Net Tax Payable</div>
-                        <div className="mt-2 text-xl font-semibold">{totals.net}</div>
-                    </div>
-                </div>
-
-                <div className="datatables pagination-padding px-5 pb-5">
+                <div className="gst-monthly-datatable-wrap datatables pagination-padding px-5 pb-5">
                     <DataTable
                         className="table-hover whitespace-nowrap"
+                        withBorder
+                        withColumnBorders
+                        borderColor="#64748b"
+                        borderRadius="sm"
+                        classNames={{ pagination: 'gst-monthly-pdf-hide' }}
                         records={tableRecords}
                         columns={[
                             {
                                 accessor: 'period_key',
-                                title: 'Month',
+                                title: t('th_month'),
                                 sortable: true,
                                 render: ({ period_label }) => <div>{period_label}</div>,
                             },
                             {
                                 accessor: 'taxable_amount',
-                                title: 'Taxable Amount',
+                                title: t('th_taxable_amount'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ taxable_amount }) => <div className="text-right">{Number(taxable_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'cgst_amount',
-                                title: 'CGST Amount',
+                                title: t('th_cgst_amount'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ cgst_amount }) => <div className="text-right">{Number(cgst_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'sgst_amount',
-                                title: 'SGST Amount',
+                                title: t('th_sgst_amount'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ sgst_amount }) => <div className="text-right">{Number(sgst_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'igst_amount',
-                                title: 'IGST Amount',
+                                title: t('th_igst_amount'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ igst_amount }) => <div className="text-right">{Number(igst_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'total_tax_amount',
-                                title: 'Total Tax',
+                                title: t('th_total_tax'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ total_tax_amount }) => (

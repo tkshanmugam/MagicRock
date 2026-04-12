@@ -2,7 +2,7 @@
 import IconEdit from '@/components/icon/icon-edit';
 import IconPlus from '@/components/icon/icon-plus';
 import IconX from '@/components/icon/icon-x';
-import { sortBy } from 'lodash';
+import { orderBy, sortBy } from 'lodash';
 import type { DataTableColumn, DataTableProps, DataTableSortStatus } from 'mantine-datatable';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { organizationContext } from '@/lib/organizationContext';
 import { apiGet, apiPost } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
+import { getTranslation } from '@/i18n';
 
 type PurchaseVoucherRecord = {
     id: number;
@@ -30,6 +31,7 @@ const DataTable = dynamic<DataTableProps<PurchaseVoucherRecord>>(() => import('m
 });
 
 const ComponentsAppsPurchaseList = () => {
+    const { t } = getTranslation();
     const canViewPurchase = organizationContext.hasPermission('Purchase', 'view');
     const canCreatePurchase = organizationContext.hasPermission('Purchase', 'create');
     const canUpdatePurchase = organizationContext.hasPermission('Purchase', 'update');
@@ -49,8 +51,8 @@ const ComponentsAppsPurchaseList = () => {
 
     const [search, setSearch] = useState('');
     const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
-        columnAccessor: 'voucherNo',
-        direction: 'asc',
+        columnAccessor: 'id',
+        direction: 'desc',
     });
     const formatVoucherNo = (value: string | number) => String(value).padStart(4, '0');
 
@@ -190,8 +192,9 @@ const ComponentsAppsPurchaseList = () => {
                     amount: Number(row.total_amount || 0).toFixed(2),
                     status: row.status || 'active',
                 }));
-                setItems(normalized);
-                setInitialRecords(sortBy(normalized, 'voucherNo'));
+                const ordered = orderBy(normalized, ['id'], ['desc']);
+                setItems(ordered);
+                setInitialRecords(ordered);
             } catch (error: any) {
                 console.error('Failed to load purchase vouchers', error);
             } finally {
@@ -205,6 +208,7 @@ const ComponentsAppsPurchaseList = () => {
         setInitialRecords(() => {
             return items.filter((item) => {
                 return (
+                    String(item.id).includes(search) ||
                     String(item.voucherNo).toLowerCase().includes(search.toLowerCase()) ||
                     item.supplierName.toLowerCase().includes(search.toLowerCase()) ||
                     item.date.toLowerCase().includes(search.toLowerCase()) ||
@@ -299,8 +303,14 @@ const ComponentsAppsPurchaseList = () => {
                         records={records}
                         columns={[
                             {
+                                accessor: 'id',
+                                title: t('th_id'),
+                                sortable: true,
+                                width: 90,
+                            },
+                            {
                                 accessor: 'voucherNo',
-                                title: 'Purchase Voucher',
+                                title: t('th_purchase_voucher'),
                                 sortable: true,
                                 render: ({ voucherNo, id, status }) => (
                                     <Link href={`/apps/purchase/edit?id=${id}`}>
@@ -318,16 +328,17 @@ const ComponentsAppsPurchaseList = () => {
                             },
                             {
                                 accessor: 'supplierName',
-                                title: 'Supplier',
+                                title: t('th_supplier'),
                                 sortable: true,
                             },
                             {
                                 accessor: 'date',
+                                title: t('th_date'),
                                 sortable: true,
                             },
                             {
                                 accessor: 'status',
-                                title: 'Status',
+                                title: t('th_status'),
                                 sortable: true,
                                 render: ({ status }) => (
                                     <span
@@ -343,13 +354,14 @@ const ComponentsAppsPurchaseList = () => {
                             },
                             {
                                 accessor: 'amount',
+                                title: t('th_amount'),
                                 sortable: true,
                                 titleClassName: 'text-right',
                                 render: ({ amount }) => <div className="text-right font-semibold">{amount}</div>,
                             },
                             {
                                 accessor: 'action',
-                                title: 'Actions',
+                                title: t('th_actions'),
                                 sortable: false,
                                 textAlignment: 'center',
                                 render: ({ id, status }) => (

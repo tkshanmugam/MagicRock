@@ -11,8 +11,10 @@ import Swal from 'sweetalert2';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { getTranslation } from '@/i18n';
 
 const ComponentsAppsUser = () => {
+    const { t } = getTranslation();
     const [addUserModal, setAddUserModal] = useState<any>(false);
     const [loading, setLoading] = useState<boolean>(false);
 
@@ -553,10 +555,10 @@ const ComponentsAppsUser = () => {
                         <table className="table-striped table-hover">
                             <thead>
                                 <tr>
-                                    <th>Username</th>
-                                    <th>Role</th>
-                                    <th>Organisations</th>
-                                    <th className="!text-center">Actions</th>
+                                    <th>{t('th_username')}</th>
+                                    <th>{t('th_role')}</th>
+                                    <th>{t('th_organisations')}</th>
+                                    <th className="!text-center">{t('th_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>

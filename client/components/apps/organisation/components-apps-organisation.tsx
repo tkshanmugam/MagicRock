@@ -10,6 +10,7 @@ import React, { Fragment, useCallback, useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
 import { apiGet, apiPost, apiPut, apiDelete, apiRequest } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
+import { getTranslation } from '@/i18n';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 const LOGO_MAX_SIZE_MB = Number(process.env.NEXT_PUBLIC_ORG_LOGO_MAX_SIZE_MB || 2);
@@ -40,6 +41,7 @@ const buildUploadsBaseUrl = (apiBaseUrl: string) => {
 const UPLOADS_BASE_URL = buildUploadsBaseUrl(API_BASE_URL);
 
 const ComponentsAppsOrganisation = () => {
+    const { t } = getTranslation();
     const [addOrganisationModal, setAddOrganisationModal] = useState<any>(false);
     const [loading, setLoading] = useState<boolean>(false);
 
@@ -407,10 +409,10 @@ const ComponentsAppsOrganisation = () => {
                         <table className="table-striped table-hover">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Address</th>
-                                    <th>City</th>
-                                    <th className="!text-center">Actions</th>
+                                    <th>{t('th_name')}</th>
+                                    <th>{t('th_address')}</th>
+                                    <th>{t('th_city')}</th>
+                                    <th className="!text-center">{t('th_actions')}</th>
                                 </tr>
                             </thead>
                             <tbody>

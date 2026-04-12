@@ -12,7 +12,12 @@ table > thead > tr > th.mantine-187dsit {
 .datatables table tr.mantine-1ublbff.mantine-1ublbff {
     @apply bg-transparent;
 }
-.datatables table tbody tr td {
+/* Strip default cell borders except on report tables (they set their own grid) */
+.datatables:not(.sales-report-datatable-wrap):not(.sales-party-datatable-wrap):not(.purchase-datatable-wrap):not(.purchase-party-datatable-wrap):not(.tax-report-datatable-wrap):not(.gst-monthly-datatable-wrap)
+    table
+    tbody
+    tr
+    td {
     @apply !border-0 !border-none;
 }
 table tr .mantine-Checkbox-root {
@@ -119,4 +124,147 @@ table tr .mantine-Checkbox-root {
 }
 .mantine-ScrollArea-viewport > div:first-child > div {
     @apply bg-none;
+}
+
+/* Sales report page view: +2px on typography (on-screen; PDF capture unchanged) */
+.sales-report-page-view {
+    font-size: calc(1rem + 2px);
+}
+.sales-report-page-view .text-sm {
+    font-size: calc(0.875rem + 2px) !important;
+}
+.sales-report-page-view .text-base {
+    font-size: calc(1rem + 2px) !important;
+}
+.sales-report-page-view .text-lg {
+    font-size: calc(1.125rem + 2px) !important;
+}
+.sales-report-page-view .text-xl {
+    font-size: calc(1.25rem + 2px) !important;
+}
+.sales-report-page-view .text-3xl {
+    font-size: calc(1.875rem + 2px) !important;
+}
+.sales-report-page-view table thead tr th,
+.sales-report-page-view table tbody tr td {
+    font-size: calc(0.875rem + 2px) !important;
+}
+.sales-report-page-view .datatables .mantine-Text-root {
+    font-size: calc(0.875rem + 2px) !important;
+}
+.sales-report-page-view .btn {
+    font-size: calc(1rem + 2px);
+}
+.sales-report-page-view .form-select,
+.sales-report-page-view .form-input {
+    font-size: calc(1rem + 2px);
+}
+
+/* Sales / Sales by Party / Purchase / Purchase by Party / GST Summary / GST Monthly: table sizes; ScrollArea scrolls horizontally */
+.sales-report-datatable-wrap .mantine-ScrollArea-root,
+.sales-party-datatable-wrap .mantine-ScrollArea-root,
+.purchase-datatable-wrap .mantine-ScrollArea-root,
+.purchase-party-datatable-wrap .mantine-ScrollArea-root,
+.tax-report-datatable-wrap .mantine-ScrollArea-root,
+.gst-monthly-datatable-wrap .mantine-ScrollArea-root {
+    @apply max-w-full;
+}
+.sales-report-datatable-wrap table,
+.sales-party-datatable-wrap table,
+.purchase-datatable-wrap table,
+.purchase-party-datatable-wrap table,
+.tax-report-datatable-wrap table,
+.gst-monthly-datatable-wrap table {
+    @apply !w-max !min-w-full;
+    table-layout: auto !important;
+}
+
+/* Sales / Sales by Party / Purchase / Purchase by Party / GST Summary / GST Monthly: visible grid + room for header text */
+.sales-report-datatable-wrap.datatables table thead tr th,
+.sales-party-datatable-wrap.datatables table thead tr th,
+.purchase-datatable-wrap.datatables table thead tr th,
+.purchase-party-datatable-wrap.datatables table thead tr th,
+.tax-report-datatable-wrap.datatables table thead tr th,
+.gst-monthly-datatable-wrap.datatables table thead tr th {
+    @apply !border !border-solid !border-slate-600 !bg-slate-300 !text-slate-950;
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    vertical-align: middle !important;
+    line-height: 1.45 !important;
+    min-height: 3.25rem;
+    position: relative !important;
+    top: auto !important;
+    z-index: auto !important;
+    overflow: visible !important;
+}
+.sales-report-datatable-wrap.datatables table thead tr th .mantine-Group-root,
+.sales-party-datatable-wrap.datatables table thead tr th .mantine-Group-root,
+.purchase-datatable-wrap.datatables table thead tr th .mantine-Group-root,
+.purchase-party-datatable-wrap.datatables table thead tr th .mantine-Group-root,
+.tax-report-datatable-wrap.datatables table thead tr th .mantine-Group-root,
+.gst-monthly-datatable-wrap.datatables table thead tr th .mantine-Group-root {
+    align-items: center !important;
+    min-height: 2.25rem;
+    overflow: visible !important;
+}
+.sales-report-datatable-wrap.datatables table tbody tr td,
+.sales-party-datatable-wrap.datatables table tbody tr td,
+.purchase-datatable-wrap.datatables table tbody tr td,
+.purchase-party-datatable-wrap.datatables table tbody tr td,
+.tax-report-datatable-wrap.datatables table tbody tr td,
+.gst-monthly-datatable-wrap.datatables table tbody tr td {
+    @apply !border !border-solid !border-slate-500 !bg-white;
+}
+.sales-report-datatable-wrap.datatables table tbody tr,
+.sales-party-datatable-wrap.datatables table tbody tr,
+.purchase-datatable-wrap.datatables table tbody tr,
+.purchase-party-datatable-wrap.datatables table tbody tr,
+.tax-report-datatable-wrap.datatables table tbody tr,
+.gst-monthly-datatable-wrap.datatables table tbody tr {
+    @apply !border-0 bg-white;
+}
+
+/* Sales / Sales by Party / Purchase / Purchase by Party / GST Summary / GST Monthly on-screen: thin outer frame; inner lines medium grey (PDF: onclone) */
+.sales-report-page-view .invoice-table,
+.sales-party-report-page-view .invoice-table,
+.purchase-report-page-view .invoice-table,
+.purchase-party-report-page-view .invoice-table,
+.tax-report-page-view .invoice-table,
+.gst-monthly-report-page-view .invoice-table {
+    border-width: 1px !important;
+    border-style: solid !important;
+    border-color: rgb(148 163 184) !important; /* slate-400 outer frame */
+}
+.sales-report-page-view .invoice-table > header {
+    border-bottom-width: 1px !important;
+    border-bottom-color: rgb(100 116 139) !important; /* slate-500 */
+}
+.sales-report-page-view .sales-report-summary-card,
+.sales-party-report-page-view .sales-party-summary-card,
+.purchase-report-page-view .purchase-summary-card,
+.purchase-party-report-page-view .purchase-party-summary-card,
+.tax-report-page-view .tax-report-summary-card,
+.gst-monthly-report-page-view .gst-monthly-summary-card {
+    border-width: 1px !important;
+    border-style: solid !important;
+    border-color: rgb(100 116 139) !important; /* slate-500 */
+}
+.sales-report-page-view .sales-report-datatable-wrap.datatables table thead tr th,
+.sales-party-report-page-view .sales-party-datatable-wrap.datatables table thead tr th,
+.purchase-report-page-view .purchase-datatable-wrap.datatables table thead tr th,
+.purchase-party-report-page-view .purchase-party-datatable-wrap.datatables table thead tr th,
+.tax-report-page-view .tax-report-datatable-wrap.datatables table thead tr th,
+.gst-monthly-report-page-view .gst-monthly-datatable-wrap.datatables table thead tr th {
+    background-color: rgb(203 213 225) !important; /* slate-300 */
+    border-color: rgb(100 116 139) !important; /* slate-500 */
+    border-width: 1px !important;
+}
+.sales-report-page-view .sales-report-datatable-wrap.datatables table tbody tr td,
+.sales-party-report-page-view .sales-party-datatable-wrap.datatables table tbody tr td,
+.purchase-report-page-view .purchase-datatable-wrap.datatables table tbody tr td,
+.purchase-party-report-page-view .purchase-party-datatable-wrap.datatables table tbody tr td,
+.tax-report-page-view .tax-report-datatable-wrap.datatables table tbody tr td,
+.gst-monthly-report-page-view .gst-monthly-datatable-wrap.datatables table tbody tr td {
+    border-color: rgb(100 116 139) !important; /* slate-500 */
+    border-width: 1px !important;
 }

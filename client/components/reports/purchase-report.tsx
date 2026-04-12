@@ -10,7 +10,9 @@ import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { exportToCsv } from '@/lib/exportUtils';
+import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
 import { fetchPurchaseReport, PurchaseReportItem, PurchaseReportSummary } from '@/lib/reportApi';
+import { getTranslation } from '@/i18n';
 
 const DataTable = dynamic<DataTableProps<PurchaseReportItem>>(() => import('mantine-datatable').then((mod) => mod.DataTable), {
     ssr: false,
@@ -22,6 +24,7 @@ const DataTable = dynamic<DataTableProps<PurchaseReportItem>>(() => import('mant
 });
 
 const PurchaseReport = () => {
+    const { t } = getTranslation();
     const reportRef = useRef<HTMLDivElement | null>(null);
     const canViewReports = organizationContext.hasPermission('Reports', 'view');
     const [isSuperAdmin, setIsSuperAdmin] = useState(organizationContext.getIsSuperAdmin());
@@ -36,8 +39,8 @@ const PurchaseReport = () => {
 
     const [invoiceTypeFilter, setInvoiceTypeFilter] = useState<string>('');
     const [supplierFilter, setSupplierFilter] = useState<string>('');
-    const [startDate, setStartDate] = useState<string>('');
-    const [endDate, setEndDate] = useState<string>('');
+    const [startDate, setStartDate] = useState<string>(() => getCurrentMonthDateRange().start);
+    const [endDate, setEndDate] = useState<string>(() => getCurrentMonthDateRange().end);
     const [search, setSearch] = useState('');
 
     const [page, setPage] = useState(1);
@@ -195,6 +198,47 @@ const PurchaseReport = () => {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
+            onclone: (_doc, clonedEl) => {
+                clonedEl.style.backgroundColor = '#ffffff';
+
+                clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
+                    if (node instanceof HTMLElement) {
+                        node.style.overflow = 'visible';
+                        node.style.height = 'auto';
+                        node.style.maxHeight = 'none';
+                    }
+                });
+                clonedEl.querySelectorAll('.mantine-ScrollArea-viewport').forEach((node) => {
+                    if (node instanceof HTMLElement) {
+                        node.style.overflow = 'visible';
+                        node.style.height = 'auto';
+                        node.style.maxHeight = 'none';
+                    }
+                });
+
+                clonedEl.style.border = '1px solid rgb(148, 163, 184)';
+                clonedEl.style.borderRadius = '8px';
+
+                const table = clonedEl.querySelector('table');
+                if (table instanceof HTMLElement) {
+                    table.style.borderCollapse = 'collapse';
+                }
+                clonedEl.querySelectorAll('table th, table td').forEach((cell) => {
+                    if (cell instanceof HTMLElement) {
+                        cell.style.border = '1px solid rgb(100, 116, 139)';
+                    }
+                });
+                clonedEl.querySelectorAll('table thead th').forEach((th) => {
+                    if (th instanceof HTMLElement) {
+                        th.style.backgroundColor = 'rgb(203, 213, 225)';
+                        th.style.color = 'rgb(2, 6, 23)';
+                    }
+                });
+
+                clonedEl.querySelectorAll('.purchase-report-pdf-hide').forEach((node) => {
+                    (node as HTMLElement).style.display = 'none';
+                });
+            },
         });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
@@ -238,8 +282,8 @@ const PurchaseReport = () => {
     }
 
     return (
-        <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
-            <div className="px-5 pt-5">
+        <div className="purchase-report-page-view panel border-white-light px-0 dark:border-[#1b2e4b]">
+            <div className="px-5 pt-5 print:hidden">
                 <div className="flex flex-wrap items-center gap-3">
                     <button type="button" className="btn btn-primary gap-2" onClick={downloadPdf}>
                         Export PDF
@@ -249,98 +293,107 @@ const PurchaseReport = () => {
                     </button>
                 </div>
             </div>
-            <div ref={reportRef} className="invoice-table">
-                <div className="px-5 pt-6 text-center">
+            <div className="mb-4.5 flex flex-col gap-5 px-5 pt-5 md:flex-row md:items-center print:hidden">
+                <div className="flex flex-wrap items-center gap-3">
+                    {organisationsList.length > 1 ? (
+                        <select
+                            id="organisationId"
+                            className="form-select w-full sm:w-64"
+                            value={organisationId}
+                            onChange={(e) => setOrganisationId(e.target.value)}
+                        >
+                            <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
+                            {organisationsList.map((org: any) => (
+                                <option key={org.id} value={org.id}>
+                                    {org.name}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input id="organisationId" className="form-input w-full sm:w-64" value={selectedOrganisationLabel} readOnly />
+                    )}
+                    <select className="form-select w-full sm:w-40" value={invoiceTypeFilter} onChange={(e) => setInvoiceTypeFilter(e.target.value)}>
+                        <option value="">All Types</option>
+                        <option value="TAX">Tax</option>
+                        <option value="NON_TAX">Non Tax</option>
+                    </select>
+                    <input
+                        type="text"
+                        className="form-input w-full sm:w-52"
+                        placeholder="Supplier"
+                        value={supplierFilter}
+                        onChange={(e) => setSupplierFilter(e.target.value)}
+                    />
+                    <input type="date" className="form-input w-full sm:w-40" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    <input type="date" className="form-input w-full sm:w-40" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    <input type="text" className="form-input w-full sm:w-48" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+            </div>
+
+            <div
+                ref={reportRef}
+                className="invoice-table w-full min-w-0 rounded-lg bg-white text-gray-900 shadow-sm dark:bg-black dark:text-white"
+            >
+                <div className="border-b border-slate-500 px-5 pb-6 pt-6 text-center dark:border-slate-500">
                     <div className="text-xl font-bold tracking-wide text-black dark:text-white">Purchase Report</div>
-                    <div className="mt-1 text-sm text-gray-500">
+                    <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         {selectedOrganisationLabel}
                         {startDate || endDate ? ` • ${startDate || '...'} to ${endDate || '...'}` : ''}
                         {invoiceTypeFilter ? ` • ${invoiceTypeFilter}` : ''}
                         {supplierFilter ? ` • ${supplierFilter}` : ''}
                     </div>
                 </div>
-                <div className="mb-4.5 flex flex-col gap-5 px-5 pt-5 md:flex-row md:items-center">
-                    <div className="flex flex-wrap items-center gap-3">
-                        {organisationsList.length > 1 ? (
-                            <select
-                                id="organisationId"
-                                className="form-select w-full sm:w-64"
-                                value={organisationId}
-                                onChange={(e) => setOrganisationId(e.target.value)}
-                            >
-                                <option value="">{orgsLoading ? 'Loading organisations...' : 'Select Organisation'}</option>
-                                {organisationsList.map((org: any) => (
-                                    <option key={org.id} value={org.id}>
-                                        {org.name}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <input id="organisationId" className="form-input w-full sm:w-64" value={selectedOrganisationLabel} readOnly />
-                        )}
-                        <select className="form-select w-full sm:w-40" value={invoiceTypeFilter} onChange={(e) => setInvoiceTypeFilter(e.target.value)}>
-                            <option value="">All Types</option>
-                            <option value="TAX">Tax</option>
-                            <option value="NON_TAX">Non Tax</option>
-                        </select>
-                        <input
-                            type="text"
-                            className="form-input w-full sm:w-52"
-                            placeholder="Supplier"
-                            value={supplierFilter}
-                            onChange={(e) => setSupplierFilter(e.target.value)}
-                        />
-                        <input type="date" className="form-input w-full sm:w-40" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                        <input type="date" className="form-input w-full sm:w-40" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                        <input type="text" className="form-input w-full sm:w-48" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
+
+                <div className="grid gap-4 px-5 py-5 md:grid-cols-3">
+                    <div className="purchase-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Purchase Value</div>
+                        <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{Number(summary?.total_purchase_value || 0).toFixed(2)}</div>
+                    </div>
+                    <div className="purchase-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Input Tax</div>
+                        <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{Number(summary?.total_input_tax || 0).toFixed(2)}</div>
+                    </div>
+                    <div className="purchase-summary-card panel shadow-none dark:shadow-none">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Net Purchase Amount</div>
+                        <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{Number(summary?.net_purchase_amount || 0).toFixed(2)}</div>
                     </div>
                 </div>
 
-                <div className="grid gap-4 px-5 pb-5 md:grid-cols-3">
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Total Purchase Value</div>
-                        <div className="mt-2 text-xl font-semibold">{Number(summary?.total_purchase_value || 0).toFixed(2)}</div>
-                    </div>
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Total Input Tax</div>
-                        <div className="mt-2 text-xl font-semibold">{Number(summary?.total_input_tax || 0).toFixed(2)}</div>
-                    </div>
-                    <div className="panel">
-                        <div className="text-sm text-gray-500">Net Purchase Amount</div>
-                        <div className="mt-2 text-xl font-semibold">{Number(summary?.net_purchase_amount || 0).toFixed(2)}</div>
-                    </div>
-                </div>
-
-                <div className="datatables pagination-padding px-5 pb-5">
+                <div className="purchase-datatable-wrap datatables pagination-padding px-5 pb-5">
                     <DataTable
                         className="table-hover whitespace-nowrap"
+                        withBorder
+                        withColumnBorders
+                        borderColor="#64748b"
+                        borderRadius="sm"
+                        classNames={{ pagination: 'purchase-report-pdf-hide' }}
                         records={filteredRecords}
                         columns={[
                             {
                                 accessor: 'purchase_date',
-                                title: 'Purchase Date',
+                                title: t('th_purchase_date'),
                                 sortable: true,
                                 render: ({ purchase_date }) => (purchase_date ? <div>{new Date(purchase_date).toLocaleDateString()}</div> : <div>-</div>),
                             },
-                            { accessor: 'purchase_invoice_number', title: 'Invoice Number', sortable: true },
-                            { accessor: 'supplier_name', title: 'Supplier', sortable: true },
+                            { accessor: 'purchase_invoice_number', title: t('th_invoice_number'), sortable: true },
+                            { accessor: 'supplier_name', title: t('th_supplier'), sortable: true },
                             {
                                 accessor: 'subtotal',
-                                title: 'Subtotal',
+                                title: t('th_subtotal'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ subtotal }) => <div className="text-right">{Number(subtotal || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'tax_amount',
-                                title: 'Tax',
+                                title: t('th_tax'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ tax_amount }) => <div className="text-right">{Number(tax_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'invoice_total',
-                                title: 'Invoice Total',
+                                title: t('th_invoice_total'),
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ invoice_total }) => <div className="text-right font-semibold">{Number(invoice_total || 0).toFixed(2)}</div>,

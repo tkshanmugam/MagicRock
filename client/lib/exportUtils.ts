@@ -4,7 +4,11 @@ export type CsvColumn<T> = {
     format?: (value: T[keyof T], row: T) => string | number | null | undefined;
 };
 
-export const exportToCsv = <T>(filename: string, rows: T[], columns: CsvColumn<T>[]) => {
+const escapeCsvCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+export const exportToCsv = <T>(filename: string, rows: T[], columns: CsvColumn<T>[], preambleRows?: string[]) => {
+    const preamble =
+        preambleRows?.length ? preambleRows.map((line) => escapeCsvCell(line)).join('\n') + '\n' : '';
     const header = columns.map((col) => col.label).join(',');
     const body = rows
         .map((row) =>
@@ -12,13 +16,12 @@ export const exportToCsv = <T>(filename: string, rows: T[], columns: CsvColumn<T
                 .map((col) => {
                     const rawValue = col.format ? col.format(row[col.key], row) : row[col.key];
                     const safe = rawValue === null || rawValue === undefined ? '' : String(rawValue);
-                    const escaped = safe.replace(/"/g, '""');
-                    return `"${escaped}"`;
+                    return escapeCsvCell(safe);
                 })
                 .join(',')
         )
         .join('\n');
-    const csv = [header, body].filter(Boolean).join('\n');
+    const csv = preamble + [header, body].filter(Boolean).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

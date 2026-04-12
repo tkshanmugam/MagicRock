@@ -10,7 +10,7 @@ import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { numberToWords } from '@/lib/numberToWords';
 import { SalesInvoicePayload, createSalesInvoice, fetchNextSalesInvoiceNumber, fetchSalesInvoice, updateSalesInvoice } from '@/lib/salesInvoiceApi';
-import { CustomerRecord, findCustomerByGstin, findCustomerByName, getCustomersForOrganisation } from '@/lib/customerStore';
+import { CustomerRecord, findCustomerByGstin, findCustomerByName, listCustomers } from '@/lib/customerApi';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 const buildUploadsBaseUrl = (apiBaseUrl: string) => {
@@ -202,15 +202,27 @@ const SalesInvoiceForm = ({ mode, invoiceId }: Props) => {
     }, [organisationId]);
 
     useEffect(() => {
-        setCustomerDirectory(getCustomersForOrganisation(organisationId));
-    }, [organisationId]);
-
-    useEffect(() => {
-        const handleStorage = () => {
-            setCustomerDirectory(getCustomersForOrganisation(organisationId));
+        let cancelled = false;
+        const load = async () => {
+            if (!organisationId) {
+                setCustomerDirectory([]);
+                return;
+            }
+            try {
+                const rows = await listCustomers();
+                if (!cancelled) {
+                    setCustomerDirectory(rows);
+                }
+            } catch {
+                if (!cancelled) {
+                    setCustomerDirectory([]);
+                }
+            }
         };
-        window.addEventListener('storage', handleStorage);
-        return () => window.removeEventListener('storage', handleStorage);
+        load();
+        return () => {
+            cancelled = true;
+        };
     }, [organisationId]);
 
     const fetchNextInvoiceNumber = useCallback(async () => {
@@ -329,11 +341,11 @@ const SalesInvoiceForm = ({ mode, invoiceId }: Props) => {
 
     const applyCustomerSelection = useCallback((customer: CustomerRecord) => {
         setCustomerName(customer.name);
-        setCustomerAddress(customer.address);
-        setCustomerState(customer.state);
-        setCustomerStateCode(customer.state_code);
+        setCustomerAddress(customer.address ?? '');
+        setCustomerState(customer.state ?? '');
+        setCustomerStateCode(customer.state_code ?? '');
         setCustomerGstin(customer.gstin);
-        setCustomerContact(customer.contact_no);
+        setCustomerContact(customer.contact_no ?? '');
     }, []);
 
     const handleCustomerNameChange = (value: string) => {

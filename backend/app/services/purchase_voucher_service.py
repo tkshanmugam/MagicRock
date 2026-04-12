@@ -106,7 +106,7 @@ async def list_purchase_vouchers(
     organisation_id: Optional[int] = None,
     include_cancelled: bool = False,
 ) -> List[PurchaseVoucher]:
-    query = select(PurchaseVoucher).order_by(PurchaseVoucher.created_at.desc())
+    query = select(PurchaseVoucher).order_by(PurchaseVoucher.id.desc())
     if organisation_id is not None:
         query = query.where(PurchaseVoucher.organisation_id == organisation_id)
     if not include_cancelled:

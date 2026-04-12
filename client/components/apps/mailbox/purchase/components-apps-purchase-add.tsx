@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPost } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
-import { CustomerRecord, findCustomerByGstin, findCustomerByName, getCustomersForOrganisation } from '@/lib/customerStore';
+import { CustomerRecord, findCustomerByGstin, findCustomerByName, listCustomers } from '@/lib/customerApi';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 const buildUploadsBaseUrl = (apiBaseUrl: string) => {
@@ -291,15 +291,27 @@ const ComponentsAppsPurchaseAdd = () => {
     }, [organisationId, organisationsList]);
 
     useEffect(() => {
-        setCustomerDirectory(getCustomersForOrganisation(organisationId));
-    }, [organisationId]);
-
-    useEffect(() => {
-        const handleStorage = () => {
-            setCustomerDirectory(getCustomersForOrganisation(organisationId));
+        let cancelled = false;
+        const load = async () => {
+            if (!organisationId) {
+                setCustomerDirectory([]);
+                return;
+            }
+            try {
+                const rows = await listCustomers();
+                if (!cancelled) {
+                    setCustomerDirectory(rows);
+                }
+            } catch {
+                if (!cancelled) {
+                    setCustomerDirectory([]);
+                }
+            }
         };
-        window.addEventListener('storage', handleStorage);
-        return () => window.removeEventListener('storage', handleStorage);
+        load();
+        return () => {
+            cancelled = true;
+        };
     }, [organisationId]);
 
     useEffect(() => {
@@ -362,10 +374,10 @@ const ComponentsAppsPurchaseAdd = () => {
     const applyCustomerSelection = useCallback((customer: CustomerRecord) => {
         setSupplierName(customer.name);
         setSupplierAddress((prev) => (prev.trim() ? prev : customer.address || ''));
-        setSupplierState(customer.state);
-        setSupplierStateCode(customer.state_code);
+        setSupplierState(customer.state || '');
+        setSupplierStateCode(customer.state_code || '');
         setSupplierGstin(customer.gstin);
-        setSupplierContact(customer.contact_no);
+        setSupplierContact(customer.contact_no || '');
     }, []);
 
     const handleSupplierNameChange = (value: string) => {

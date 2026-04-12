@@ -12,6 +12,7 @@ import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { cancelSalesInvoice, listSalesInvoices, SalesInvoice } from '@/lib/salesInvoiceApi';
+import { getTranslation } from '@/i18n';
 
 const DataTable = dynamic<DataTableProps<SalesInvoice>>(() => import('mantine-datatable').then((mod) => mod.DataTable), {
     ssr: false,
@@ -23,6 +24,7 @@ const DataTable = dynamic<DataTableProps<SalesInvoice>>(() => import('mantine-da
 });
 
 const ComponentsAppsInvoiceList = () => {
+    const { t } = getTranslation();
     const canViewSales = organizationContext.hasPermission('Sales', 'view');
     const canCreateSales = organizationContext.hasPermission('Sales', 'create');
     const canUpdateSales = organizationContext.hasPermission('Sales', 'update');
@@ -218,7 +220,7 @@ const ComponentsAppsInvoiceList = () => {
     const columns: DataTableColumn<SalesInvoice>[] = [
         {
             accessor: 'invoice_number',
-            title: 'Invoice',
+            title: t('th_invoice'),
             sortable: true,
             render: ({ invoice_number, id }) => (
                 <Link href={`/apps/invoice/preview?id=${id}`}>
@@ -228,28 +230,32 @@ const ComponentsAppsInvoiceList = () => {
         },
         {
             accessor: 'customer_name',
+            title: t('th_customer'),
             sortable: true,
             render: ({ customer_name }) => <div className="font-semibold">{customer_name}</div>,
         },
         {
             accessor: 'invoice_date',
+            title: t('th_invoice_date'),
             sortable: true,
             render: ({ invoice_date }) => <div>{new Date(invoice_date).toLocaleDateString()}</div>,
         },
         {
             accessor: 'invoice_total',
+            title: t('th_invoice_total'),
             sortable: true,
             titleClassName: 'text-right',
             render: ({ invoice_total }) => <div className="text-right font-semibold">{Number(invoice_total || 0).toFixed(2)}</div>,
         },
         {
             accessor: 'status',
+            title: t('th_status'),
             sortable: true,
             render: ({ status }) => <span className={`badge badge-outline-${status === 'CANCELLED' ? 'danger' : 'success'}`}>{status}</span>,
         },
         {
             accessor: 'action',
-            title: 'Actions',
+            title: t('th_actions'),
             sortable: false,
             textAlignment: 'center',
             render: ({ id, status }) => (

@@ -461,6 +461,10 @@ const ComponentsAppsInvoicePreview = ({ actionVariant = 'full' }: { actionVarian
                                             <div className="gst-value">{invoice.customer_state || '-'}</div>
                                         </div>
                                         <div className="gst-info-row gst-info-row-right">
+                                            <div className="gst-label gst-label-wrap">State Code</div>
+                                            <div className="gst-value">{invoice.customer_state_code || '-'}</div>
+                                        </div>
+                                        <div className="gst-info-row gst-info-row-right">
                                             <div className="gst-label gst-label-wrap">E-Way Bill No.</div>
                                             <div className="gst-value">{invoiceMeta.ewayBillNo || '-'}</div>
                                         </div>

@@ -17,7 +17,7 @@ from app.middlewares.api_key_auth import APIKeyAuthMiddleware
 from app.middlewares.rate_limit import RateLimitMiddleware
 from app.middlewares.timestamp_validation import TimestampValidationMiddleware
 from app.middlewares.ip_allowlist import IPAllowlistMiddleware
-from app.api import auth, users, audit, health, organisations, organizations_rbac, reports, dashboard, debug_auth, debug_api_key, test_auth, verify_token, test_secret_key, roles, modules, purchase_vouchers, sales_invoices, tax_configurations
+from app.api import auth, users, audit, health, organisations, organizations_rbac, reports, dashboard, debug_auth, debug_api_key, test_auth, verify_token, test_secret_key, roles, modules, purchase_vouchers, sales_invoices, tax_configurations, customers
 
 # Initialize logging first
 setup_logging()
@@ -210,6 +210,7 @@ app.include_router(modules.router, prefix=settings.API_V1_PREFIX)
 app.include_router(purchase_vouchers.router, prefix=settings.API_V1_PREFIX)
 app.include_router(sales_invoices.router, prefix=settings.API_V1_PREFIX)
 app.include_router(tax_configurations.router, prefix=settings.API_V1_PREFIX)
+app.include_router(customers.router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")

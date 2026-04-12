@@ -1,4 +1,4 @@
-import { apiGet } from '@/lib/apiClient';
+import { apiGet, apiDelete, apiPost } from '@/lib/apiClient';
 
 export type AuditLogItem = {
     id: number;
@@ -38,3 +38,10 @@ export const fetchAuditLogs = (params: Record<string, string | number | undefine
     apiGet<AuditLogListResponse>(`audit-logs${buildQuery(params)}`);
 
 export const fetchAuditLog = (id: number) => apiGet<AuditLogItem>(`audit-logs/${id}`);
+
+export const deleteAuditLog = (id: number) => apiDelete<void>(`audit-logs/${id}`);
+
+export type AuditLogBulkDeleteResponse = { deleted: number };
+
+export const bulkDeleteAuditLogs = (ids: number[]) =>
+    apiPost<AuditLogBulkDeleteResponse>('audit-logs/bulk-delete', { ids });
