@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import dynamic from 'next/dynamic';
 import type { DataTableProps, DataTableSortStatus } from 'mantine-datatable';
 import html2canvas from 'html2canvas';
@@ -9,8 +10,10 @@ import jsPDF from 'jspdf';
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
+import { fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchPurchaseReport, PurchaseReportItem, PurchaseReportSummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -50,6 +53,7 @@ const PurchaseReport = () => {
         columnAccessor: 'purchase_date',
         direction: 'desc',
     });
+    const [pdfExportRecords, setPdfExportRecords] = useState<PurchaseReportItem[] | null>(null);
 
     useEffect(() => {
         organizationContext.updateIsSuperAdminFromToken();
@@ -74,40 +78,14 @@ const PurchaseReport = () => {
     }, [isSuperAdmin]);
 
     useEffect(() => {
-        if (authState.isAuthStateReady()) {
+        const load = () => {
+            organizationContext.updateIsSuperAdminFromToken();
+            setIsSuperAdmin(organizationContext.getIsSuperAdmin());
             fetchOrganisations();
-            return;
-        }
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
-                clearInterval(interval);
-                if (authState.isAuthStateReady()) {
-                    organizationContext.updateIsSuperAdminFromToken();
-                    setIsSuperAdmin(organizationContext.getIsSuperAdmin());
-                    fetchOrganisations();
-                }
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        };
+        const unsubscribe = authState.onAuthStateReady(load);
+        return unsubscribe;
     }, [fetchOrganisations]);
-
-    useEffect(() => {
-        if (!organisationsList.length) {
-            return;
-        }
-        const storedId = organizationContext.getSelectedOrganizationId();
-        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        if (storedMatch && !organisationId) {
-            setOrganisationId(String(storedMatch.id));
-            return;
-        }
-        if (!organisationId) {
-            setOrganisationId(String(organisationsList[0].id));
-        }
-    }, [organisationsList, organisationId]);
 
     const updateOrganisationSelection = useCallback(
         async (nextOrganisationId: string) => {
@@ -134,11 +112,12 @@ const PurchaseReport = () => {
         [isSuperAdmin]
     );
 
-    useEffect(() => {
-        if (organisationId) {
-            updateOrganisationSelection(organisationId);
-        }
-    }, [organisationId, updateOrganisationSelection]);
+    useOrganizationSelection({
+        organisationsList,
+        organisationId,
+        setOrganisationId,
+        onOrganisationChange: updateOrganisationSelection,
+    });
 
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
@@ -190,18 +169,53 @@ const PurchaseReport = () => {
         );
     }, [records, search]);
 
+    const tableRecords = pdfExportRecords ?? filteredRecords;
+
     const downloadPdf = async () => {
-        if (!reportRef.current) {
+        if (!reportRef.current || !organisationId) {
             return;
         }
-        const canvas = await html2canvas(reportRef.current, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            onclone: (_doc, clonedEl) => {
-                clonedEl.style.backgroundColor = '#ffffff';
 
-                clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
+        const applySearch = (items: PurchaseReportItem[]) => {
+            if (!search.trim()) {
+                return items;
+            }
+            const term = search.toLowerCase();
+            return items.filter(
+                (item) =>
+                    String(item.purchase_invoice_number || '').toLowerCase().includes(term) ||
+                    item.supplier_name?.toLowerCase().includes(term)
+            );
+        };
+
+        try {
+            const allRows = await fetchAllPaginatedReportItems(async (skip, limit) => {
+                const response = await fetchPurchaseReport({
+                    organisation_id: Number(organisationId),
+                    from_date: startDate,
+                    to_date: endDate,
+                    invoice_type: invoiceTypeFilter,
+                    supplier: supplierFilter,
+                    skip,
+                    limit,
+                });
+                return { items: response.items || [], total: response.total || 0 };
+            });
+            const rowsForPdf = applySearch(allRows);
+            flushSync(() => setPdfExportRecords(rowsForPdf));
+            await waitNextPaint();
+
+            const canvas = await html2canvas(reportRef.current, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                windowWidth: reportRef.current.scrollWidth,
+                windowHeight: reportRef.current.scrollHeight,
+                onclone: (_doc, clonedEl) => {
+                    clonedEl.style.backgroundColor = '#ffffff';
+                    clonedEl.style.overflow = 'visible';
+
+                    clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
                     if (node instanceof HTMLElement) {
                         node.style.overflow = 'visible';
                         node.style.height = 'auto';
@@ -238,28 +252,33 @@ const PurchaseReport = () => {
                 clonedEl.querySelectorAll('.purchase-report-pdf-hide').forEach((node) => {
                     (node as HTMLElement).style.display = 'none';
                 });
-            },
-        });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = pdfWidth;
-        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+                },
+            });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = pdfWidth;
+            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-        let heightLeft = imgHeight;
-        let position = 0;
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-
-        while (heightLeft > 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
+            let heightLeft = imgHeight;
+            let position = 0;
             pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
             heightLeft -= pdfHeight;
-        }
 
-        pdf.save(`purchase-report-${organisationId || 'org'}.pdf`);
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
+
+            pdf.save(`purchase-report-${organisationId || 'org'}.pdf`);
+        } catch (e) {
+            console.error('Failed to export purchase report PDF', e);
+        } finally {
+            flushSync(() => setPdfExportRecords(null));
+        }
     };
 
     const downloadExcel = () => {
@@ -367,7 +386,16 @@ const PurchaseReport = () => {
                         borderColor="#64748b"
                         borderRadius="sm"
                         classNames={{ pagination: 'purchase-report-pdf-hide' }}
-                        records={filteredRecords}
+                        records={tableRecords}
+                        totalRecords={pdfExportRecords === null ? totalRecords : pdfExportRecords.length}
+                        recordsPerPage={pdfExportRecords === null ? pageSize : Math.max(pdfExportRecords.length, 1)}
+                        page={pdfExportRecords === null ? page : 1}
+                        onPageChange={pdfExportRecords === null ? setPage : () => {}}
+                        recordsPerPageOptions={
+                            pdfExportRecords === null ? PAGE_SIZES : [Math.max(pdfExportRecords.length, 1)]
+                        }
+                        onRecordsPerPageChange={pdfExportRecords === null ? setPageSize : () => {}}
+                        paginationText={({ from, to, totalRecords: tr }) => `Showing ${from} to ${to} of ${tr} entries`}
                         columns={[
                             {
                                 accessor: 'purchase_date',
@@ -400,15 +428,8 @@ const PurchaseReport = () => {
                             },
                         ]}
                         highlightOnHover
-                        totalRecords={totalRecords}
-                        recordsPerPage={pageSize}
-                        page={page}
-                        onPageChange={(p) => setPage(p)}
-                        recordsPerPageOptions={PAGE_SIZES}
-                        onRecordsPerPageChange={setPageSize}
                         sortStatus={sortStatus}
                         onSortStatusChange={setSortStatus}
-                        paginationText={({ from, to, totalRecords }) => `Showing ${from} to ${to} of ${totalRecords} entries`}
                     />
                     {loading && <div className="px-5 py-3 text-sm text-gray-500">Loading purchase report...</div>}
                 </div>

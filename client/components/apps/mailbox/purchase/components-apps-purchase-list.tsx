@@ -8,6 +8,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import React, { useCallback, useEffect, useState } from 'react';
 import { organizationContext } from '@/lib/organizationContext';
+import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { apiGet, apiPost } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { getTranslation } from '@/i18n';
@@ -62,58 +63,42 @@ const ComponentsAppsPurchaseList = () => {
     }, []);
 
     const fetchOrganisations = useCallback(async () => {
-        if (!authState.isAuthStateReady()) {
-            return;
-        }
         try {
             setOrgsLoading(true);
-            const endpoint = isSuperAdmin ? 'organisations' : 'organisations/me';
-            const response = await apiGet<any>(endpoint);
-            const organisations = Array.isArray(response) ? response : response.data || response.results || [];
-            setOrganisationsList(organisations);
+            const superAdminNow = organizationContext.getIsSuperAdmin();
+            setIsSuperAdmin(superAdminNow);
+            const endpoints = superAdminNow ? ['organisations', 'organisations/me'] : ['organisations/me', 'organisations'];
+            let resolved: any[] = [];
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await apiGet<any>(endpoint);
+                    const organisations = Array.isArray(response) ? response : response.data || response.results || [];
+                    if (organisations.length) {
+                        resolved = organisations;
+                        break;
+                    }
+                } catch (_error) {
+                    // Try next endpoint as a fallback.
+                }
+            }
+            setOrganisationsList(resolved);
         } catch (error) {
             console.error('Failed to fetch organisations', error);
         } finally {
             setOrgsLoading(false);
         }
-    }, [isSuperAdmin]);
+    }, []);
 
     useEffect(() => {
-        if (authState.isAuthStateReady()) {
+        const load = () => {
+            organizationContext.updateIsSuperAdminFromToken();
+            setIsSuperAdmin(organizationContext.getIsSuperAdmin());
             fetchOrganisations();
-            return;
-        }
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
-                clearInterval(interval);
-                if (authState.isAuthStateReady()) {
-                    organizationContext.updateIsSuperAdminFromToken();
-                    setIsSuperAdmin(organizationContext.getIsSuperAdmin());
-                    fetchOrganisations();
-                }
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        };
+        load();
+        const unsubscribe = authState.onAuthStateReady(load);
+        return unsubscribe;
     }, [fetchOrganisations]);
-
-    useEffect(() => {
-        if (!organisationsList.length) {
-            return;
-        }
-        const storedId = organizationContext.getSelectedOrganizationId();
-        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        const currentMatch = organisationId ? organisationsList.find((org: any) => String(org.id) === String(organisationId)) : null;
-        if (currentMatch) {
-            return;
-        }
-        const fallback = storedMatch || organisationsList[0];
-        if (fallback) {
-            setOrganisationId(String(fallback.id));
-        }
-    }, [organisationsList, organisationId]);
 
     const updateOrganisationSelection = useCallback(
         async (nextOrganisationId: string) => {
@@ -140,25 +125,12 @@ const ComponentsAppsPurchaseList = () => {
         [isSuperAdmin]
     );
 
-    useEffect(() => {
-        if (organisationId) {
-            updateOrganisationSelection(organisationId);
-        }
-    }, [organisationId, updateOrganisationSelection]);
-
-    useEffect(() => {
-        const syncSelected = () => {
-            const selected = organizationContext.getSelectedOrganizationId();
-            const idStr = selected ? String(selected) : '';
-            const match = idStr && organisationsList.length ? organisationsList.find((org: any) => String(org.id) === idStr) : null;
-            if (match) {
-                setOrganisationId(String(match.id));
-            }
-        };
-        syncSelected();
-        window.addEventListener('organization-permissions-updated', syncSelected);
-        return () => window.removeEventListener('organization-permissions-updated', syncSelected);
-    }, [organisationsList]);
+    useOrganizationSelection({
+        organisationsList,
+        organisationId,
+        setOrganisationId,
+        onOrganisationChange: updateOrganisationSelection,
+    });
 
     useEffect(() => {
         setPage(1);

@@ -3,9 +3,11 @@ import IconPrinter from '@/components/icon/icon-printer';
 import IconSave from '@/components/icon/icon-save';
 import IconX from '@/components/icon/icon-x';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
 import { apiGet, apiPost } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { CustomerRecord, findCustomerByGstin, findCustomerByName, listCustomers } from '@/lib/customerApi';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
@@ -105,6 +107,20 @@ const ComponentsAppsPurchaseAdd = () => {
             return '';
         }
         return String(value).padStart(4, '0');
+    };
+    const showMessage = (msg = '', type: 'success' | 'error' | 'warning' = 'success') => {
+        const toast: any = Swal.mixin({
+            toast: true,
+            position: 'top',
+            showConfirmButton: false,
+            timer: 3000,
+            customClass: { container: 'toast' },
+        });
+        toast.fire({
+            icon: type,
+            title: msg,
+            padding: '10px 20px',
+        });
     };
     const [items, setItems] = useState<PurchaseItemRow[]>([
         {
@@ -234,15 +250,25 @@ const ComponentsAppsPurchaseAdd = () => {
     }, []);
 
     const fetchOrganisations = useCallback(async () => {
-        if (!authState.isAuthStateReady()) {
-            return;
-        }
         try {
             setOrgsLoading(true);
-            const endpoint = isSuperAdmin ? 'organisations' : 'organisations/me';
-            const response = await apiGet<any>(endpoint);
-            const organisations = Array.isArray(response) ? response : response.data || response.results || [];
-            setOrganisationsList(organisations);
+            const superAdminNow = organizationContext.getIsSuperAdmin();
+            setIsSuperAdmin(superAdminNow);
+            const endpoints = superAdminNow ? ['organisations', 'organisations/me'] : ['organisations/me', 'organisations'];
+            let resolved: any[] = [];
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await apiGet<any>(endpoint);
+                    const organisations = Array.isArray(response) ? response : response.data || response.results || [];
+                    if (organisations.length) {
+                        resolved = organisations;
+                        break;
+                    }
+                } catch (_error) {
+                    // Try next endpoint as a fallback.
+                }
+            }
+            setOrganisationsList(resolved);
         } catch (error) {
             console.error('Failed to fetch organisations', error);
             // Keep the previous list on transient errors to avoid flicker.
@@ -250,30 +276,27 @@ const ComponentsAppsPurchaseAdd = () => {
         finally {
             setOrgsLoading(false);
         }
-    }, [isSuperAdmin]);
+    }, []);
 
-    useEffect(() => {
-        const syncSelected = () => {
-            const selected = organizationContext.getSelectedOrganizationId();
-            const idStr = selected ? String(selected) : '';
-            const match = idStr && organisationsList.length ? organisationsList.find((org: any) => String(org.id) === idStr) : null;
-            if (match) {
-                const newId = String(match.id);
-                setOrganisationId(newId);
-                updateParticularsForOrganisation(newId);
+    const updateOrganisationSelection = useCallback(
+        (nextOrganisationId: string) => {
+            const parsedId = Number(nextOrganisationId);
+            if (!parsedId || Number.isNaN(parsedId)) {
+                return;
             }
-        };
-        syncSelected();
-        window.addEventListener('organization-permissions-updated', syncSelected);
-        return () => window.removeEventListener('organization-permissions-updated', syncSelected);
-    }, [organisationsList, updateParticularsForOrganisation]);
+            organizationContext.setSelectedOrganizationId(parsedId);
+            setVoucherNo('');
+            updateParticularsForOrganisation(nextOrganisationId);
+        },
+        [updateParticularsForOrganisation]
+    );
 
-    useEffect(() => {
-        if (organisationId) {
-            organizationContext.setSelectedOrganizationId(Number(organisationId));
-        }
-        setVoucherNo('');
-    }, [organisationId]);
+    useOrganizationSelection({
+        organisationsList,
+        organisationId,
+        setOrganisationId,
+        onOrganisationChange: updateOrganisationSelection,
+    });
 
     useEffect(() => {
         if (!organisationId || !organisationsList.length) return;
@@ -315,43 +338,15 @@ const ComponentsAppsPurchaseAdd = () => {
     }, [organisationId]);
 
     useEffect(() => {
-        if (authState.isAuthStateReady()) {
+        const load = () => {
+            organizationContext.updateIsSuperAdminFromToken();
+            setIsSuperAdmin(organizationContext.getIsSuperAdmin());
             fetchOrganisations();
-            return;
-        }
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
-                clearInterval(interval);
-                if (authState.isAuthStateReady()) {
-                    organizationContext.updateIsSuperAdminFromToken();
-                    setIsSuperAdmin(organizationContext.getIsSuperAdmin());
-                    fetchOrganisations();
-                }
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        };
+        load();
+        const unsubscribe = authState.onAuthStateReady(load);
+        return unsubscribe;
     }, [fetchOrganisations]);
-
-    useEffect(() => {
-        if (!organisationsList.length) {
-            return;
-        }
-        const storedId = organizationContext.getSelectedOrganizationId();
-        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        const currentMatch = organisationId ? organisationsList.find((org: any) => String(org.id) === String(organisationId)) : null;
-        if (currentMatch) {
-            return;
-        }
-        const fallback = storedMatch || organisationsList[0];
-        if (fallback) {
-            const newId = String(fallback.id);
-            setOrganisationId(newId);
-            updateParticularsForOrganisation(newId);
-        }
-    }, [organisationsList, organisationId, updateParticularsForOrganisation]);
 
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
@@ -419,31 +414,11 @@ const ComponentsAppsPurchaseAdd = () => {
                     amount: Number(item.amountRs || 0),
                 })),
             });
-            window.alert('Purchase voucher saved.');
-            setVoucherDate(new Date().toISOString().split('T')[0]);
-            setSupplierName('');
-            setSupplierAddress('');
-            setSupplierState('');
-            setSupplierStateCode('');
-            setSupplierGstin('');
-            setSupplierContact('');
-            setItems([
-                {
-                    id: 1,
-                    particulars: '',
-                    bags: '',
-                    qtls: '',
-                    kgs: '',
-                    rateRs: '',
-                    amountRs: '',
-                },
-            ]);
-            setVoucherNo('');
-            if (organisationId) {
-                fetchNextVoucherNo(organisationId);
-            }
+            showMessage('Purchase voucher saved successfully.');
+            // Reload to guarantee fresh voucher state after save.
+            setTimeout(() => window.location.reload(), 300);
         } catch (error: any) {
-            window.alert(error?.message || 'Failed to save purchase voucher.');
+            showMessage(error?.message || 'Failed to save purchase voucher.', 'error');
         } finally {
             setIsSaving(false);
         }

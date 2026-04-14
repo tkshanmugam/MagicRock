@@ -9,6 +9,7 @@ let refreshTokenFailed = false;
 let authStateReady = false;
 let lastLoginTime: number | null = null;
 const REFRESH_COOLDOWN_MS = 30000; // Don't attempt refresh within 30 seconds of login (tokens should be fresh)
+const authReadyListeners = new Set<() => void>();
 
 export const authState = {
   /**
@@ -29,7 +30,17 @@ export const authState = {
    * Mark auth state as ready (tokens loaded and checked)
    */
   setAuthStateReady(ready: boolean): void {
+    const wasReady = authStateReady;
     authStateReady = ready;
+    if (ready && !wasReady) {
+      authReadyListeners.forEach((listener) => {
+        try {
+          listener();
+        } catch (_error) {
+          // Ignore subscriber failures to keep auth state flow resilient.
+        }
+      });
+    }
   },
 
   /**
@@ -64,5 +75,23 @@ export const authState = {
     refreshTokenFailed = false;
     authStateReady = false;
     lastLoginTime = Date.now(); // Record login time
+  },
+
+  /**
+   * Subscribe to auth-ready transition events.
+   * Callback is fired immediately if auth state is already ready.
+   */
+  onAuthStateReady(callback: () => void): () => void {
+    authReadyListeners.add(callback);
+    if (authStateReady) {
+      try {
+        callback();
+      } catch (_error) {
+        // Ignore subscriber failures to keep auth state flow resilient.
+      }
+    }
+    return () => {
+      authReadyListeners.delete(callback);
+    };
   },
 };

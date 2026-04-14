@@ -3,9 +3,11 @@ import IconPrinter from '@/components/icon/icon-printer';
 import IconSave from '@/components/icon/icon-save';
 import IconX from '@/components/icon/icon-x';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
 import { apiGet, apiPut } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { useSearchParams } from 'next/navigation';
 import { CustomerRecord, findCustomerByGstin, findCustomerByName, listCustomers } from '@/lib/customerApi';
 
@@ -28,7 +30,6 @@ const UPLOADS_BASE_URL = buildUploadsBaseUrl(API_BASE_URL);
 
 const ComponentsAppsPurchaseEdit = () => {
     const canUpdatePurchase = organizationContext.hasPermission('Purchase', 'update');
-    const isSuperAdmin = organizationContext.getIsSuperAdmin();
     const searchParams = useSearchParams();
     const voucherId = searchParams.get('id');
 
@@ -52,6 +53,20 @@ const ComponentsAppsPurchaseEdit = () => {
     const [items, setItems] = useState<any>([]);
     const [customerDirectory, setCustomerDirectory] = useState<CustomerRecord[]>([]);
     const [isCancelled, setIsCancelled] = useState<boolean>(false);
+    const showMessage = (msg = '', type: 'success' | 'error' | 'warning' = 'success') => {
+        const toast: any = Swal.mixin({
+            toast: true,
+            position: 'top',
+            showConfirmButton: false,
+            timer: 3000,
+            customClass: { container: 'toast' },
+        });
+        toast.fire({
+            icon: type,
+            title: msg,
+            padding: '10px 20px',
+        });
+    };
 
     const addItem = () => {
         let maxId = 0;
@@ -130,21 +145,42 @@ const ComponentsAppsPurchaseEdit = () => {
 
     const fetchOrganisations = useCallback(async () => {
         try {
-            const endpoint = isSuperAdmin ? 'organisations' : 'organisations/me';
-            const response = await apiGet<any>(endpoint);
-            const organisations = Array.isArray(response) ? response : response.data || response.results || [];
-            setOrganisationsList(organisations);
+            const superAdminNow = organizationContext.getIsSuperAdmin();
+            const endpoints = superAdminNow ? ['organisations', 'organisations/me'] : ['organisations/me', 'organisations'];
+            let resolved: any[] = [];
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await apiGet<any>(endpoint);
+                    const organisations = Array.isArray(response) ? response : response.data || response.results || [];
+                    if (organisations.length) {
+                        resolved = organisations;
+                        break;
+                    }
+                } catch (_error) {
+                    // Try next endpoint as a fallback.
+                }
+            }
+            setOrganisationsList(resolved);
         } catch (error) {
             console.error('Failed to fetch organisations', error);
             setOrganisationsList([]);
         }
-    }, [isSuperAdmin]);
+    }, []);
 
-    useEffect(() => {
-        if (organisationId) {
-            organizationContext.setSelectedOrganizationId(Number(organisationId));
+    const updateOrganisationSelection = useCallback((nextOrganisationId: string) => {
+        const parsedId = Number(nextOrganisationId);
+        if (!parsedId || Number.isNaN(parsedId)) {
+            return;
         }
-    }, [organisationId]);
+        organizationContext.setSelectedOrganizationId(parsedId);
+    }, []);
+
+    useOrganizationSelection({
+        organisationsList,
+        organisationId,
+        setOrganisationId,
+        onOrganisationChange: updateOrganisationSelection,
+    });
 
     useEffect(() => {
         let cancelled = false;
@@ -171,41 +207,12 @@ const ComponentsAppsPurchaseEdit = () => {
     }, [organisationId]);
 
     useEffect(() => {
-        if (authState.isAuthStateReady()) {
+        fetchOrganisations();
+        const unsubscribe = authState.onAuthStateReady(() => {
             fetchOrganisations();
-            return;
-        }
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
-                clearInterval(interval);
-                if (authState.isAuthStateReady()) {
-                    fetchOrganisations();
-                }
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        });
+        return unsubscribe;
     }, [fetchOrganisations]);
-
-    useEffect(() => {
-        if (!organisationsList.length) {
-            return;
-        }
-        const storedId = organizationContext.getSelectedOrganizationId();
-        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        const currentMatch = organisationId ? organisationsList.find((org: any) => String(org.id) === String(organisationId)) : null;
-        if (currentMatch) {
-            return;
-        }
-        if (!organisationId) {
-            const fallback = storedMatch || organisationsList[0];
-            if (fallback) {
-                setOrganisationId(String(fallback.id));
-            }
-        }
-    }, [organisationsList, organisationId]);
 
     useEffect(() => {
         if (!voucherId) {
@@ -277,9 +284,9 @@ const ComponentsAppsPurchaseEdit = () => {
             if (savedAddr !== undefined) {
                 setSupplierAddress(savedAddr || '');
             }
-            window.alert('Purchase voucher saved.');
+            showMessage('Purchase voucher updated successfully.');
         } catch (error: any) {
-            window.alert(error?.message || 'Failed to update purchase voucher.');
+            showMessage(error?.message || 'Failed to update purchase voucher.', 'error');
         } finally {
             setIsSaving(false);
         }

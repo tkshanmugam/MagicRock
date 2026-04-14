@@ -7,6 +7,7 @@ const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false })
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { getTranslation } from '@/i18n';
 
 type RangeMode = 'today' | 'month';
@@ -89,23 +90,12 @@ const ComponentsDashboardFinance = () => {
     }, []);
 
     useEffect(() => {
-        if (authState.isAuthStateReady()) {
+        const load = () => {
+            organizationContext.updateIsSuperAdminFromToken();
             fetchOrganisations();
-            return;
-        }
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
-                clearInterval(interval);
-                if (authState.isAuthStateReady()) {
-                    organizationContext.updateIsSuperAdminFromToken();
-                    fetchOrganisations();
-                }
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        };
+        const unsubscribe = authState.onAuthStateReady(load);
+        return unsubscribe;
     }, [fetchOrganisations]);
 
     const updateOrganisationSelection = useCallback(
@@ -133,26 +123,12 @@ const ComponentsDashboardFinance = () => {
         [isSuperAdmin]
     );
 
-    useEffect(() => {
-        if (!organisationsList.length) {
-            return;
-        }
-        const storedId = organizationContext.getSelectedOrganizationId();
-        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        if (storedMatch && !organisationId) {
-            setOrganisationId(String(storedMatch.id));
-            return;
-        }
-        if (!organisationId) {
-            setOrganisationId(String(organisationsList[0].id));
-        }
-    }, [organisationsList, organisationId]);
-
-    useEffect(() => {
-        if (organisationId) {
-            updateOrganisationSelection(organisationId);
-        }
-    }, [organisationId, updateOrganisationSelection]);
+    useOrganizationSelection({
+        organisationsList,
+        organisationId,
+        setOrganisationId,
+        onOrganisationChange: updateOrganisationSelection,
+    });
 
     const loadDashboard = useCallback(async () => {
         if (!canView) {

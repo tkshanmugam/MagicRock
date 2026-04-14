@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv } from '@/lib/exportUtils';
 import { getCurrentMonthYearMonth } from '@/lib/reportDateRange';
 import { fetchGstSummaryMonthlyReport, GstSummaryMonthlyItem, GstSummaryMonthlySummary } from '@/lib/reportApi';
@@ -80,40 +81,14 @@ const GstSummaryMonthlyReport = () => {
     }, [isSuperAdmin]);
 
     useEffect(() => {
-        if (authState.isAuthStateReady()) {
+        const load = () => {
+            organizationContext.updateIsSuperAdminFromToken();
+            setIsSuperAdmin(organizationContext.getIsSuperAdmin());
             fetchOrganisations();
-            return;
-        }
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
-                clearInterval(interval);
-                if (authState.isAuthStateReady()) {
-                    organizationContext.updateIsSuperAdminFromToken();
-                    setIsSuperAdmin(organizationContext.getIsSuperAdmin());
-                    fetchOrganisations();
-                }
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        };
+        const unsubscribe = authState.onAuthStateReady(load);
+        return unsubscribe;
     }, [fetchOrganisations]);
-
-    useEffect(() => {
-        if (!organisationsList.length) {
-            return;
-        }
-        const storedId = organizationContext.getSelectedOrganizationId();
-        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        if (storedMatch && !organisationId) {
-            setOrganisationId(String(storedMatch.id));
-            return;
-        }
-        if (!organisationId) {
-            setOrganisationId(String(organisationsList[0].id));
-        }
-    }, [organisationsList, organisationId]);
 
     const updateOrganisationSelection = useCallback(
         async (nextOrganisationId: string) => {
@@ -140,11 +115,12 @@ const GstSummaryMonthlyReport = () => {
         [isSuperAdmin]
     );
 
-    useEffect(() => {
-        if (organisationId) {
-            updateOrganisationSelection(organisationId);
-        }
-    }, [organisationId, updateOrganisationSelection]);
+    useOrganizationSelection({
+        organisationsList,
+        organisationId,
+        setOrganisationId,
+        onOrganisationChange: updateOrganisationSelection,
+    });
 
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
@@ -218,8 +194,11 @@ const GstSummaryMonthlyReport = () => {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
+            windowWidth: reportRef.current.scrollWidth,
+            windowHeight: reportRef.current.scrollHeight,
             onclone: (_doc, clonedEl) => {
                 clonedEl.style.backgroundColor = '#ffffff';
+                clonedEl.style.overflow = 'visible';
 
                 clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
                     if (node instanceof HTMLElement) {

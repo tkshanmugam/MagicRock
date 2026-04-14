@@ -268,3 +268,35 @@ table tr .mantine-Checkbox-root {
     border-color: rgb(100 116 139) !important; /* slate-500 */
     border-width: 1px !important;
 }
+
+/* Browser print: expand Mantine ScrollArea so all table rows print (not only the first viewport). */
+@media print {
+    .sales-report-page-view .mantine-ScrollArea-root,
+    .sales-party-report-page-view .mantine-ScrollArea-root,
+    .purchase-report-page-view .mantine-ScrollArea-root,
+    .purchase-party-report-page-view .mantine-ScrollArea-root,
+    .tax-report-page-view .mantine-ScrollArea-root,
+    .gst-monthly-report-page-view .mantine-ScrollArea-root {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+    .sales-report-page-view .mantine-ScrollArea-viewport,
+    .sales-party-report-page-view .mantine-ScrollArea-viewport,
+    .purchase-report-page-view .mantine-ScrollArea-viewport,
+    .purchase-party-report-page-view .mantine-ScrollArea-viewport,
+    .tax-report-page-view .mantine-ScrollArea-viewport,
+    .gst-monthly-report-page-view .mantine-ScrollArea-viewport {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+    .sales-report-page-view .mantine-ScrollArea-scrollbar,
+    .sales-party-report-page-view .mantine-ScrollArea-scrollbar,
+    .purchase-report-page-view .mantine-ScrollArea-scrollbar,
+    .purchase-party-report-page-view .mantine-ScrollArea-scrollbar,
+    .tax-report-page-view .mantine-ScrollArea-scrollbar,
+    .gst-monthly-report-page-view .mantine-ScrollArea-scrollbar {
+        display: none !important;
+    }
+}

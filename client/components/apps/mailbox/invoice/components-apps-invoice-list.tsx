@@ -11,6 +11,7 @@ import Swal from 'sweetalert2';
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
+import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { cancelSalesInvoice, listSalesInvoices, SalesInvoice } from '@/lib/salesInvoiceApi';
 import { getTranslation } from '@/i18n';
 
@@ -75,40 +76,14 @@ const ComponentsAppsInvoiceList = () => {
     }, [isSuperAdmin]);
 
     useEffect(() => {
-        if (authState.isAuthStateReady()) {
+        const load = () => {
+            organizationContext.updateIsSuperAdminFromToken();
+            setIsSuperAdmin(organizationContext.getIsSuperAdmin());
             fetchOrganisations();
-            return;
-        }
-        let attempts = 0;
-        const maxAttempts = 20;
-        const interval = setInterval(() => {
-            attempts++;
-            if (authState.isAuthStateReady() || attempts >= maxAttempts) {
-                clearInterval(interval);
-                if (authState.isAuthStateReady()) {
-                    organizationContext.updateIsSuperAdminFromToken();
-                    setIsSuperAdmin(organizationContext.getIsSuperAdmin());
-                    fetchOrganisations();
-                }
-            }
-        }, 100);
-        return () => clearInterval(interval);
+        };
+        const unsubscribe = authState.onAuthStateReady(load);
+        return unsubscribe;
     }, [fetchOrganisations]);
-
-    useEffect(() => {
-        if (!organisationsList.length) {
-            return;
-        }
-        const storedId = organizationContext.getSelectedOrganizationId();
-        const storedMatch = storedId ? organisationsList.find((org: any) => String(org.id) === String(storedId)) : null;
-        if (storedMatch && !organisationId) {
-            setOrganisationId(String(storedMatch.id));
-            return;
-        }
-        if (!organisationId) {
-            setOrganisationId(String(organisationsList[0].id));
-        }
-    }, [organisationsList, organisationId]);
 
     const updateOrganisationSelection = useCallback(
         async (nextOrganisationId: string) => {
@@ -135,11 +110,12 @@ const ComponentsAppsInvoiceList = () => {
         [isSuperAdmin]
     );
 
-    useEffect(() => {
-        if (organisationId) {
-            updateOrganisationSelection(organisationId);
-        }
-    }, [organisationId, updateOrganisationSelection]);
+    useOrganizationSelection({
+        organisationsList,
+        organisationId,
+        setOrganisationId,
+        onOrganisationChange: updateOrganisationSelection,
+    });
 
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
