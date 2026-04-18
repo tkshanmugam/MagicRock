@@ -282,14 +282,14 @@ const PurchaseReport = () => {
     };
 
     const downloadExcel = () => {
-        exportToCsv(`purchase-report-${organisationId || 'org'}.csv`, records, [
+        const columns = [
             { key: 'purchase_date', label: 'Purchase Date' },
             { key: 'purchase_invoice_number', label: 'Invoice Number' },
             { key: 'supplier_name', label: 'Supplier Name' },
             { key: 'subtotal', label: 'Subtotal' },
-            { key: 'tax_amount', label: 'Tax Amount' },
             { key: 'invoice_total', label: 'Invoice Total' },
-        ]);
+        ];
+        exportToCsv(`purchase-report-${organisationId || 'org'}.csv`, records, columns);
     };
 
     if (!canViewReports) {
@@ -363,14 +363,10 @@ const PurchaseReport = () => {
                     </div>
                 </div>
 
-                <div className="grid gap-4 px-5 py-5 md:grid-cols-3">
+                <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
                     <div className="purchase-summary-card panel shadow-none dark:shadow-none">
                         <div className="text-sm text-gray-500 dark:text-gray-400">Total Purchase Value</div>
                         <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{Number(summary?.total_purchase_value || 0).toFixed(2)}</div>
-                    </div>
-                    <div className="purchase-summary-card panel shadow-none dark:shadow-none">
-                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Input Tax</div>
-                        <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">{Number(summary?.total_input_tax || 0).toFixed(2)}</div>
                     </div>
                     <div className="purchase-summary-card panel shadow-none dark:shadow-none">
                         <div className="text-sm text-gray-500 dark:text-gray-400">Net Purchase Amount</div>
@@ -411,13 +407,6 @@ const PurchaseReport = () => {
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ subtotal }) => <div className="text-right">{Number(subtotal || 0).toFixed(2)}</div>,
-                            },
-                            {
-                                accessor: 'tax_amount',
-                                title: t('th_tax'),
-                                sortable: true,
-                                textAlignment: 'right',
-                                render: ({ tax_amount }) => <div className="text-right">{Number(tax_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'invoice_total',

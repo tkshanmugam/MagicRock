@@ -93,12 +93,6 @@ async def get_purchase_report(
     skip: int,
     limit: int,
 ) -> dict:
-    normalized_type = _normalize_invoice_type(invoice_type)
-    tax_rate = Decimal("0")
-    if normalized_type != "NON_TAX":
-        config = await _resolve_tax_config(db, organisation_id)
-        tax_rate = (config.cgst_percentage or 0) + (config.sgst_percentage or 0) + (config.igst_percentage or 0)
-
     total = await fetch_purchase_report_total(db, organisation_id, supplier_name, start_date, end_date)
     items_raw = await fetch_purchase_report_items(
         db,
@@ -108,7 +102,6 @@ async def get_purchase_report(
         end_date,
         skip,
         limit,
-        tax_rate=tax_rate,
     )
     items = [dict(row._mapping) for row in items_raw]
     summary = await fetch_purchase_report_summary(
@@ -117,7 +110,6 @@ async def get_purchase_report(
         supplier_name,
         start_date,
         end_date,
-        tax_rate=tax_rate,
     )
     return {"total": total, "items": items, "summary": summary}
 
@@ -168,12 +160,6 @@ async def get_purchase_party_report(
     skip: int,
     limit: int,
 ) -> dict:
-    normalized_type = _normalize_invoice_type(invoice_type)
-    tax_rate = Decimal("0")
-    if normalized_type != "NON_TAX":
-        config = await _resolve_tax_config(db, organisation_id)
-        tax_rate = (config.cgst_percentage or 0) + (config.sgst_percentage or 0) + (config.igst_percentage or 0)
-
     total = await fetch_purchase_party_report_total(db, organisation_id, party_name, start_date, end_date)
     items_raw = await fetch_purchase_party_report_items(
         db,
@@ -183,7 +169,6 @@ async def get_purchase_party_report(
         end_date,
         skip,
         limit,
-        tax_rate=tax_rate,
     )
     items = [dict(row._mapping) for row in items_raw]
     summary = await fetch_purchase_party_report_summary(
@@ -192,7 +177,6 @@ async def get_purchase_party_report(
         party_name,
         start_date,
         end_date,
-        tax_rate=tax_rate,
     )
     return {"total": total, "items": items, "summary": summary}
 

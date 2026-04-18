@@ -268,7 +268,6 @@ const PurchasePartyReport = () => {
             { key: 'party_name', label: 'Party Name' },
             { key: 'invoice_count', label: 'Invoice Count' },
             { key: 'subtotal', label: 'Purchase Value' },
-            { key: 'tax_amount', label: 'Input Tax' },
             { key: 'invoice_total', label: 'Net Purchase' },
         ]);
     };
@@ -398,13 +397,6 @@ const PurchasePartyReport = () => {
                                 sortable: true,
                                 textAlignment: 'right',
                                 render: ({ subtotal }) => <div className="text-right">{Number(subtotal || 0).toFixed(2)}</div>,
-                            },
-                            {
-                                accessor: 'tax_amount',
-                                title: t('th_input_tax'),
-                                sortable: true,
-                                textAlignment: 'right',
-                                render: ({ tax_amount }) => <div className="text-right">{Number(tax_amount || 0).toFixed(2)}</div>,
                             },
                             {
                                 accessor: 'invoice_total',

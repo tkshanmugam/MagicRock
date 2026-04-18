@@ -244,6 +244,7 @@ const ComponentsAppsPurchaseAdd = () => {
         fetchNextVoucherNo(organisationId);
     }, [organisationId, voucherNo, fetchNextVoucherNo]);
 
+
     useEffect(() => {
         organizationContext.updateIsSuperAdminFromToken();
         setIsSuperAdmin(organizationContext.getIsSuperAdmin());
@@ -506,18 +507,20 @@ const ComponentsAppsPurchaseAdd = () => {
                         </div>
                         <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                             <div>To</div>
-                            <input
-                                id="voucherTo"
-                                className={`${inputBorderClass} h-8 text-sm`}
-                                list="supplierNameOptions"
-                                value={supplierName}
-                                onChange={(e) => handleSupplierNameChange(e.target.value)}
-                            />
-                            <datalist id="supplierNameOptions">
-                                {customerDirectory.map((customer) => (
-                                    <option key={customer.id} value={customer.name} label={customer.gstin} />
-                                ))}
-                            </datalist>
+                            <div className="min-w-0 w-full">
+                                <input
+                                    id="voucherTo"
+                                    className={`${inputBorderClass} h-8 w-full text-sm`}
+                                    list="supplierNameOptions"
+                                    value={supplierName}
+                                    onChange={(e) => handleSupplierNameChange(e.target.value)}
+                                />
+                                <datalist id="supplierNameOptions">
+                                    {customerDirectory.map((customer) => (
+                                        <option key={customer.id} value={customer.name} label={customer.gstin} />
+                                    ))}
+                                </datalist>
+                            </div>
                         </div>
                     </div>
                 </div>

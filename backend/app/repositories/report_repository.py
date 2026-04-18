@@ -236,12 +236,11 @@ async def fetch_purchase_report_items(
     end_date,
     skip: int,
     limit: int,
-    tax_rate: Decimal,
 ) -> Sequence:
     filters = _purchase_filters(organisation_id, supplier_name, start_date, end_date)
     subtotal = func.coalesce(PurchaseVoucher.total_amount, 0)
-    tax_amount = subtotal * literal(tax_rate / Decimal("100"))
-    invoice_total = subtotal + tax_amount
+    tax_amount = literal(0)
+    invoice_total = subtotal
     query = (
         select(
             PurchaseVoucher.voucher_date.label("purchase_date"),
@@ -266,15 +265,14 @@ async def fetch_purchase_report_summary(
     supplier_name: Optional[str],
     start_date,
     end_date,
-    tax_rate: Decimal,
 ) -> dict:
     filters = _purchase_filters(organisation_id, supplier_name, start_date, end_date)
     subtotal = func.coalesce(PurchaseVoucher.total_amount, 0)
-    tax_amount = subtotal * literal(tax_rate / Decimal("100"))
+    tax_amount = literal(0)
     query = select(
         func.coalesce(func.sum(subtotal), 0).label("total_purchase_value"),
         func.coalesce(func.sum(tax_amount), 0).label("total_input_tax"),
-        func.coalesce(func.sum(subtotal + tax_amount), 0).label("net_purchase_amount"),
+        func.coalesce(func.sum(subtotal), 0).label("net_purchase_amount"),
     ).where(*filters)
     result = await db.execute(query)
     row = result.one()
@@ -301,12 +299,11 @@ async def fetch_purchase_party_report_items(
     end_date,
     skip: int,
     limit: int,
-    tax_rate: Decimal,
 ) -> Sequence:
     filters = _purchase_filters(organisation_id, supplier_name, start_date, end_date)
     subtotal_sum = func.coalesce(func.sum(PurchaseVoucher.total_amount), 0)
-    tax_amount = subtotal_sum * literal(tax_rate / Decimal("100"))
-    invoice_total = subtotal_sum + tax_amount
+    tax_amount = literal(0)
+    invoice_total = subtotal_sum
     query = (
         select(
             PurchaseVoucher.supplier_name.label("party_name"),
@@ -343,15 +340,14 @@ async def fetch_purchase_party_report_summary(
     supplier_name: Optional[str],
     start_date,
     end_date,
-    tax_rate: Decimal,
 ) -> dict:
     filters = _purchase_filters(organisation_id, supplier_name, start_date, end_date)
     subtotal_sum = func.coalesce(func.sum(PurchaseVoucher.total_amount), 0)
-    tax_amount = subtotal_sum * literal(tax_rate / Decimal("100"))
+    tax_amount = literal(0)
     query = select(
         subtotal_sum.label("total_purchase_value"),
         tax_amount.label("total_input_tax"),
-        (subtotal_sum + tax_amount).label("net_purchase_amount"),
+        subtotal_sum.label("net_purchase_amount"),
     ).where(*filters)
     result = await db.execute(query)
     row = result.one()

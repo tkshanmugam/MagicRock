@@ -3,7 +3,7 @@ import IconEye from '@/components/icon/icon-eye';
 import IconSave from '@/components/icon/icon-save';
 import IconX from '@/components/icon/icon-x';
 import Link from 'next/link';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
@@ -91,6 +91,8 @@ const SalesInvoiceForm = ({ mode, invoiceId }: Props) => {
     const [loading, setLoading] = useState<boolean>(false);
     const [saving, setSaving] = useState<boolean>(false);
     const [errorMessage, setErrorMessage] = useState<string>('');
+    const [customerNameFieldFocused, setCustomerNameFieldFocused] = useState(false);
+    const customerNameBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const inputBorderClass = 'form-input !border-t-0 !border-l-0 !border-r-0 !rounded-none';
     const getLogoUrl = useCallback((logoName: string) => {
@@ -340,6 +342,47 @@ const SalesInvoiceForm = ({ mode, invoiceId }: Props) => {
         }
     };
 
+    const customerNameMatches = useMemo(() => {
+        const q = customerName.trim().toLowerCase();
+        if (!q) {
+            return [];
+        }
+        return customerDirectory.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 40);
+    }, [customerName, customerDirectory]);
+
+    const clearCustomerNameBlurTimer = useCallback(() => {
+        if (customerNameBlurTimerRef.current) {
+            clearTimeout(customerNameBlurTimerRef.current);
+            customerNameBlurTimerRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => () => clearCustomerNameBlurTimer(), [clearCustomerNameBlurTimer]);
+
+    const handleCustomerNameFocus = useCallback(() => {
+        clearCustomerNameBlurTimer();
+        setCustomerNameFieldFocused(true);
+    }, [clearCustomerNameBlurTimer]);
+
+    const handleCustomerNameBlur = useCallback(() => {
+        clearCustomerNameBlurTimer();
+        customerNameBlurTimerRef.current = setTimeout(() => {
+            setCustomerNameFieldFocused(false);
+            customerNameBlurTimerRef.current = null;
+        }, 200);
+    }, [clearCustomerNameBlurTimer]);
+
+    const pickCustomerFromNameList = useCallback(
+        (customer: CustomerRecord) => {
+            clearCustomerNameBlurTimer();
+            applyCustomerSelection(customer);
+            setCustomerNameFieldFocused(false);
+        },
+        [applyCustomerSelection, clearCustomerNameBlurTimer]
+    );
+
+    const showCustomerNameSuggest = customerNameFieldFocused && customerNameMatches.length > 0;
+
     const handleCustomerGstinChange = (value: string) => {
         setCustomerGstin(value);
         const match = findCustomerByGstin(customerDirectory, value);
@@ -561,47 +604,100 @@ const SalesInvoiceForm = ({ mode, invoiceId }: Props) => {
                         <div className="mt-2 grid gap-2">
                             <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                                 <div>Name</div>
-                                <input
-                                    className={`${inputBorderClass} h-8 text-sm`}
-                                    list="customerNameOptions"
-                                    value={customerName}
-                                    onChange={(e) => handleCustomerNameChange(e.target.value)}
-                                />
-                                <datalist id="customerNameOptions">
-                                    {customerDirectory.map((customer) => (
-                                        <option key={customer.id} value={customer.name} label={customer.gstin} />
-                                    ))}
-                                </datalist>
+                                <div className="relative min-w-0 w-full">
+                                    <input
+                                        id="salesInvoiceRecipientName"
+                                        name="sales_invoice_recipient_name"
+                                        type="text"
+                                        autoComplete="off"
+                                        spellCheck={false}
+                                        className={`${inputBorderClass} h-8 w-full text-sm`}
+                                        value={customerName}
+                                        onChange={(e) => handleCustomerNameChange(e.target.value)}
+                                        onFocus={handleCustomerNameFocus}
+                                        onBlur={handleCustomerNameBlur}
+                                        aria-autocomplete="list"
+                                        aria-expanded={showCustomerNameSuggest}
+                                        aria-controls="sales-invoice-customer-name-suggest"
+                                    />
+                                    {showCustomerNameSuggest && (
+                                        <ul
+                                            id="sales-invoice-customer-name-suggest"
+                                            role="listbox"
+                                            className="absolute left-0 right-0 top-full z-[200] mt-0.5 max-h-56 overflow-auto rounded border border-white-light bg-white py-1 text-sm shadow-lg dark:border-[#1b2e4b] dark:bg-[#0e1726]"
+                                        >
+                                            {customerNameMatches.map((customer) => (
+                                                <li
+                                                    key={customer.id}
+                                                    role="option"
+                                                    className="cursor-pointer px-3 py-2 hover:bg-primary/10 dark:hover:bg-white/5"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        pickCustomerFromNameList(customer);
+                                                    }}
+                                                >
+                                                    <div className="font-medium text-black dark:text-white">{customer.name}</div>
+                                                    {customer.gstin ? (
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">{customer.gstin}</div>
+                                                    ) : null}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
                             </div>
                             <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                                 <div>Address</div>
-                                <input className={`${inputBorderClass} h-8 text-sm`} value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} />
+                                <input
+                                    className={`${inputBorderClass} h-8 text-sm`}
+                                    autoComplete="off"
+                                    value={customerAddress}
+                                    onChange={(e) => setCustomerAddress(e.target.value)}
+                                />
                             </div>
                             <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                                 <div>State</div>
-                                <input className={`${inputBorderClass} h-8 text-sm`} value={customerState} onChange={(e) => setCustomerState(e.target.value)} />
+                                <input
+                                    className={`${inputBorderClass} h-8 text-sm`}
+                                    autoComplete="off"
+                                    value={customerState}
+                                    onChange={(e) => setCustomerState(e.target.value)}
+                                />
                             </div>
                             <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                                 <div>State Code</div>
-                                <input className={`${inputBorderClass} h-8 text-sm`} value={customerStateCode} onChange={(e) => setCustomerStateCode(e.target.value)} />
+                                <input
+                                    className={`${inputBorderClass} h-8 text-sm`}
+                                    autoComplete="off"
+                                    value={customerStateCode}
+                                    onChange={(e) => setCustomerStateCode(e.target.value)}
+                                />
                             </div>
                             <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                                 <div>GSTIN</div>
-                                <input
-                                    className={`${inputBorderClass} h-8 text-sm`}
-                                    list="customerGstinOptions"
-                                    value={customerGstin}
-                                    onChange={(e) => handleCustomerGstinChange(e.target.value)}
-                                />
-                                <datalist id="customerGstinOptions">
-                                    {customerDirectory.map((customer) => (
-                                        <option key={customer.id} value={customer.gstin} label={customer.name} />
-                                    ))}
-                                </datalist>
+                                <div className="min-w-0 w-full">
+                                    <input
+                                        className={`${inputBorderClass} h-8 w-full text-sm`}
+                                        autoComplete="off"
+                                        list="customerGstinOptions"
+                                        value={customerGstin}
+                                        onChange={(e) => handleCustomerGstinChange(e.target.value)}
+                                    />
+                                    <datalist id="customerGstinOptions">
+                                        {customerDirectory.map((customer) => (
+                                            <option key={customer.id} value={customer.gstin} label={customer.name} />
+                                        ))}
+                                    </datalist>
+                                </div>
                             </div>
                             <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                                 <div>Contact No</div>
-                                <input className={`${inputBorderClass} h-8 text-sm`} value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} />
+                                <input
+                                    className={`${inputBorderClass} h-8 text-sm`}
+                                    autoComplete="off"
+                                    value={customerContact}
+                                    onChange={(e) => setCustomerContact(e.target.value)}
+                                />
                             </div>
                         </div>
                     </div>
