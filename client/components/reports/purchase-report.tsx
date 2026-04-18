@@ -11,7 +11,7 @@ import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
-import { exportToCsv } from '@/lib/exportUtils';
+import { exportToCsv, type CsvColumn } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
 import { fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchPurchaseReport, PurchaseReportItem, PurchaseReportSummary } from '@/lib/reportApi';
@@ -282,7 +282,7 @@ const PurchaseReport = () => {
     };
 
     const downloadExcel = () => {
-        const columns = [
+        const columns: CsvColumn<PurchaseReportItem>[] = [
             { key: 'purchase_date', label: 'Purchase Date' },
             { key: 'purchase_invoice_number', label: 'Invoice Number' },
             { key: 'supplier_name', label: 'Supplier Name' },
