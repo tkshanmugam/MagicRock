@@ -1,8 +1,8 @@
 """
 Customer CRUD (global directory; unique GSTIN across all organisations).
 """
-from typing import List
-from sqlalchemy import select
+from typing import List, Optional, Tuple
+from sqlalchemy import select, func, or_, cast, String, asc, desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
@@ -10,13 +10,57 @@ from app.models.customer import Customer
 from app.api.schemas import CustomerCreate, CustomerUpdate
 
 
+_CUSTOMER_SORT_COLUMNS = {
+    "name": Customer.name,
+    "gstin": Customer.gstin,
+    "contact_no": Customer.contact_no,
+    "state": Customer.state,
+    "updated_at": Customer.updated_at,
+    "created_at": Customer.created_at,
+    "id": Customer.id,
+}
+
+
 def _normalize_gstin(value: str) -> str:
     return (value or "").strip().upper()
 
 
-async def list_customers(db: AsyncSession) -> List[Customer]:
-    result = await db.execute(select(Customer).order_by(Customer.name.asc(), Customer.id.asc()))
-    return list(result.scalars().all())
+async def list_customers(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 100,
+    search: Optional[str] = None,
+    sort_by: str = "name",
+    sort_dir: str = "asc",
+) -> Tuple[int, List[Customer]]:
+    sort_col = _CUSTOMER_SORT_COLUMNS.get((sort_by or "name").lower(), Customer.name)
+    ascending = (sort_dir or "asc").lower() != "desc"
+    primary = asc(sort_col) if ascending else desc(sort_col)
+    tie = Customer.id.asc() if ascending else Customer.id.desc()
+
+    query = select(Customer)
+    count_query = select(func.count(Customer.id))
+
+    term = (search or "").strip()
+    if term:
+        pattern = f"%{term}%"
+        clause = or_(
+            Customer.name.ilike(pattern),
+            Customer.gstin.ilike(pattern),
+            Customer.contact_no.ilike(pattern),
+            Customer.state.ilike(pattern),
+            cast(Customer.id, String).ilike(pattern),
+        )
+        query = query.where(clause)
+        count_query = count_query.where(clause)
+
+    query = query.order_by(primary, tie).offset(skip).limit(limit)
+
+    total_result = await db.execute(count_query)
+    total = int(total_result.scalar_one() or 0)
+
+    result = await db.execute(query)
+    return total, list(result.scalars().all())
 
 
 async def get_customer(db: AsyncSession, customer_id: int) -> Customer:

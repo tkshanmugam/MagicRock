@@ -302,6 +302,11 @@ class PurchaseVoucherResponse(PurchaseVoucherBase):
         from_attributes = True
 
 
+class PurchaseVoucherListResponse(BaseModel):
+    total: int
+    items: List[PurchaseVoucherResponse]
+
+
 # Tax Configuration Schemas
 class TaxConfigurationBase(BaseModel):
     organisation_id: int
@@ -449,6 +454,11 @@ class CustomerResponse(CustomerBase):
 
     class Config:
         from_attributes = True
+
+
+class CustomerListResponse(BaseModel):
+    total: int
+    items: List[CustomerResponse]
 
 
 # Sales Invoice Schemas

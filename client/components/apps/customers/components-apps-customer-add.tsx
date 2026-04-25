@@ -3,7 +3,7 @@
 import IconSave from '@/components/icon/icon-save';
 import Swal from 'sweetalert2';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CustomerRecord, createCustomer, fetchCustomer, listCustomers, updateCustomer } from '@/lib/customerApi';
+import { CustomerRecord, createCustomer, fetchCustomer, listCustomersPaged, updateCustomer } from '@/lib/customerApi';
 import { organizationContext } from '@/lib/organizationContext';
 
 type Props = {
@@ -36,8 +36,13 @@ const ComponentsAppsCustomerAdd = ({ mode = 'create', customerId }: Props) => {
             return;
         }
         try {
-            const list = await listCustomers();
-            setRecentCustomers(list.slice(0, 5));
+            const { items } = await listCustomersPaged({
+                skip: 0,
+                limit: 5,
+                sort_by: 'updated_at',
+                sort_dir: 'desc',
+            });
+            setRecentCustomers(items);
         } catch {
             setRecentCustomers([]);
         }

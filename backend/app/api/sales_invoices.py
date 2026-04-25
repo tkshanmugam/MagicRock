@@ -65,6 +65,7 @@ async def list_invoices(
     invoice_type: str | None = Query(default=None, alias="invoice_type"),
     start_date: date | None = Query(default=None, alias="start_date"),
     end_date: date | None = Query(default=None, alias="end_date"),
+    search: str | None = Query(default=None, alias="search"),
     _=Depends(get_current_active_user),
     __=Depends(RequirePermissionFromHeader("SALES", "view")),
     db: AsyncSession = Depends(get_db),
@@ -78,6 +79,7 @@ async def list_invoices(
         invoice_type=invoice_type,
         start_date=start_date,
         end_date=end_date,
+        search=search,
     )
     return SalesInvoiceListResponse(total=total, items=items)
 

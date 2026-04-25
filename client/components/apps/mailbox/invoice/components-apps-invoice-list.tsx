@@ -48,6 +48,7 @@ const ComponentsAppsInvoiceList = () => {
     const [selectedRecords, setSelectedRecords] = useState<any>([]);
 
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
         columnAccessor: 'invoice_number',
         direction: 'asc',
@@ -120,6 +121,11 @@ const ComponentsAppsInvoiceList = () => {
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
 
+    useEffect(() => {
+        const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => window.clearTimeout(handle);
+    }, [search]);
+
     const fetchInvoices = useCallback(async () => {
         if (!organisationId) {
             return;
@@ -134,6 +140,7 @@ const ComponentsAppsInvoiceList = () => {
                 invoice_type: invoiceTypeFilter,
                 start_date: startDate,
                 end_date: endDate,
+                search: debouncedSearch || undefined,
             });
             setRecords(response.items || []);
             setTotalRecords(response.total || 0);
@@ -142,7 +149,7 @@ const ComponentsAppsInvoiceList = () => {
         } finally {
             setLoading(false);
         }
-    }, [organisationId, page, pageSize, statusFilter, invoiceTypeFilter, startDate, endDate]);
+    }, [organisationId, page, pageSize, statusFilter, invoiceTypeFilter, startDate, endDate, debouncedSearch]);
 
     useEffect(() => {
         fetchInvoices();
@@ -150,7 +157,7 @@ const ComponentsAppsInvoiceList = () => {
 
     useEffect(() => {
         setPage(1);
-    }, [pageSize, statusFilter, invoiceTypeFilter, startDate, endDate, organisationId]);
+    }, [pageSize, statusFilter, invoiceTypeFilter, startDate, endDate, organisationId, debouncedSearch]);
 
     const handleCancel = async (invoiceId: number) => {
         const result = await Swal.fire({
@@ -312,16 +319,7 @@ const ComponentsAppsInvoiceList = () => {
                 <div className="datatables pagination-padding">
                     <DataTable
                         className="table-hover whitespace-nowrap"
-                        records={records.filter((item) => {
-                            if (!search) {
-                                return true;
-                            }
-                            const term = search.toLowerCase();
-                            return (
-                                item.invoice_number?.toLowerCase().includes(term) ||
-                                item.customer_name?.toLowerCase().includes(term)
-                            );
-                        })}
+                        records={records}
                         columns={columns}
                         highlightOnHover
                         totalRecords={totalRecords}

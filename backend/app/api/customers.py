@@ -4,9 +4,7 @@ Customer master endpoints (global directory; RBAC still uses X-Organization-Id).
 
 """
 
-from typing import List
-
-from fastapi import APIRouter, Depends, status, Request, Header
+from fastapi import APIRouter, Depends, status, Request, Header, Query
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +16,7 @@ from app.models.user import User
 
 from app.api.dependencies_rbac import RequirePermissionFromHeader
 
-from app.api.schemas import CustomerCreate, CustomerUpdate, CustomerResponse
+from app.api.schemas import CustomerCreate, CustomerUpdate, CustomerResponse, CustomerListResponse
 
 from app.services.customer_service import (
 
@@ -44,19 +42,26 @@ router = APIRouter(prefix="/customers", tags=["Customers"])
 
 
 
-@router.get("", response_model=List[CustomerResponse])
-
+@router.get("", response_model=CustomerListResponse)
 async def list_customer_records(
-
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=10000),
+    search: str | None = Query(default=None, alias="search"),
+    sort_by: str = Query("name", alias="sort_by"),
+    sort_dir: str = Query("asc", alias="sort_dir"),
     _=Depends(get_current_active_user),
-
     __=Depends(RequirePermissionFromHeader("CUSTOMERS", "view")),
-
     db: AsyncSession = Depends(get_db),
-
 ):
-
-    return await list_customers(db)
+    total, items = await list_customers(
+        db,
+        skip=skip,
+        limit=limit,
+        search=search,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
+    return CustomerListResponse(total=total, items=items)
 
 
 

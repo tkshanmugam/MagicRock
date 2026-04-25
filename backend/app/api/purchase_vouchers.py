@@ -1,14 +1,18 @@
 """
 Purchase voucher endpoints.
 """
-from typing import List
 from fastapi import APIRouter, Depends, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.api.dependencies import get_current_active_user
 from app.models.user import User
 from app.api.dependencies_rbac import RequirePermissionFromHeader
-from app.api.schemas import PurchaseVoucherCreate, PurchaseVoucherUpdate, PurchaseVoucherResponse
+from app.api.schemas import (
+    PurchaseVoucherCreate,
+    PurchaseVoucherUpdate,
+    PurchaseVoucherResponse,
+    PurchaseVoucherListResponse,
+)
 from app.services.purchase_voucher_service import (
     create_purchase_voucher,
     list_purchase_vouchers,
@@ -47,19 +51,26 @@ async def create_voucher(
     return voucher
 
 
-@router.get("", response_model=List[PurchaseVoucherResponse])
+@router.get("", response_model=PurchaseVoucherListResponse)
 async def list_vouchers(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     organisation_id: int | None = Query(default=None, alias="organisation_id"),
     include_cancelled: bool = Query(False, alias="include_cancelled"),
+    search: str | None = Query(default=None, alias="search"),
     _=Depends(get_current_active_user),
     __=Depends(RequirePermissionFromHeader("PURCHASE", "view")),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_purchase_vouchers(
-        db, skip=skip, limit=limit, organisation_id=organisation_id, include_cancelled=include_cancelled
+    total, items = await list_purchase_vouchers(
+        db,
+        skip=skip,
+        limit=limit,
+        organisation_id=organisation_id,
+        include_cancelled=include_cancelled,
+        search=search,
     )
+    return PurchaseVoucherListResponse(total=total, items=items)
 
 
 @router.get("/next-number")

@@ -6,8 +6,8 @@ import IconTrashLines from '@/components/icon/icon-trash-lines';
 import type { DataTableColumn, DataTableProps, DataTableSortStatus } from 'mantine-datatable';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CustomerRecord, deleteCustomer, listCustomers } from '@/lib/customerApi';
+import React, { useCallback, useEffect, useState } from 'react';
+import { CustomerRecord, deleteCustomer, listCustomersPaged } from '@/lib/customerApi';
 import { organizationContext } from '@/lib/organizationContext';
 import { getTranslation } from '@/i18n';
 
@@ -23,32 +23,44 @@ const DataTable = dynamic<DataTableProps<CustomerRecord>>(() => import('mantine-
 const ComponentsAppsCustomerList = () => {
     const { t } = getTranslation();
     const [records, setRecords] = useState<CustomerRecord[]>([]);
+    const [totalRecords, setTotalRecords] = useState(0);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const PAGE_SIZES = [10, 20, 30, 50, 100];
     const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
         columnAccessor: 'name',
         direction: 'asc',
     });
+    /** Bumps when header org (or permissions) refresh so we reset page and refetch. */
+    const [directoryEpoch, setDirectoryEpoch] = useState(0);
 
     const canView = organizationContext.hasPermission('Customers', 'view');
     const canCreate = organizationContext.hasPermission('Customers', 'create');
     const canUpdate = organizationContext.hasPermission('Customers', 'update');
     const canDelete = organizationContext.hasPermission('Customers', 'delete');
 
+    const sortColumnForApi = (accessor: string | number) => {
+        const key = String(accessor);
+        const allowed = new Set(['name', 'gstin', 'contact_no', 'state', 'updated_at', 'created_at', 'id']);
+        return allowed.has(key) ? key : 'name';
+    };
+
     const refreshCustomers = useCallback(async () => {
         const orgId = organizationContext.getSelectedOrganizationId();
         if (!orgId) {
             setRecords([]);
+            setTotalRecords(0);
             setLoadError('Select an organisation (header) to load customers. The list is shared across all organisations.');
             setLoading(false);
             return;
         }
         if (!canView) {
             setRecords([]);
+            setTotalRecords(0);
             setLoadError('You do not have permission to view customers.');
             setLoading(false);
             return;
@@ -56,62 +68,53 @@ const ComponentsAppsCustomerList = () => {
         setLoading(true);
         setLoadError(null);
         try {
-            const rows = await listCustomers();
-            setRecords(rows);
+            const response = await listCustomersPaged({
+                skip: (page - 1) * pageSize,
+                limit: pageSize,
+                search: debouncedSearch || undefined,
+                sort_by: sortColumnForApi(sortStatus.columnAccessor) as 'name' | 'gstin' | 'contact_no' | 'state' | 'updated_at' | 'created_at' | 'id',
+                sort_dir: sortStatus.direction,
+            });
+            setRecords(response.items || []);
+            setTotalRecords(response.total || 0);
         } catch (e: any) {
             setRecords([]);
+            setTotalRecords(0);
             setLoadError(e?.message || 'Failed to load customers.');
         } finally {
             setLoading(false);
         }
-    }, [canView]);
+    }, [canView, page, pageSize, debouncedSearch, sortStatus.columnAccessor, sortStatus.direction, directoryEpoch]);
 
     useEffect(() => {
         refreshCustomers();
     }, [refreshCustomers]);
 
     useEffect(() => {
-        const onOrgChange = () => refreshCustomers();
+        const onOrgChange = () => {
+            setPage(1);
+            setDirectoryEpoch((n) => n + 1);
+        };
         window.addEventListener('organization-permissions-updated', onOrgChange);
         return () => window.removeEventListener('organization-permissions-updated', onOrgChange);
-    }, [refreshCustomers]);
+    }, []);
+
+    useEffect(() => {
+        const handle = window.setTimeout(() => {
+            const next = search.trim();
+            setDebouncedSearch((prev) => {
+                if (prev !== next) {
+                    setPage(1);
+                }
+                return next;
+            });
+        }, 300);
+        return () => window.clearTimeout(handle);
+    }, [search]);
 
     useEffect(() => {
         setPage(1);
-    }, [pageSize, search]);
-
-    const filteredRecords = useMemo(() => {
-        if (!search) {
-            return records;
-        }
-        const term = search.toLowerCase();
-        return records.filter((record) => {
-            return (
-                record.name.toLowerCase().includes(term) ||
-                (record.gstin || '').toLowerCase().includes(term) ||
-                (record.contact_no || '').toLowerCase().includes(term) ||
-                (record.state || '').toLowerCase().includes(term)
-            );
-        });
-    }, [records, search]);
-
-    const sortedRecords = useMemo(() => {
-        const sorted = [...filteredRecords];
-        const { columnAccessor, direction } = sortStatus;
-        sorted.sort((a: any, b: any) => {
-            const left = String(a[columnAccessor] ?? '').toLowerCase();
-            const right = String(b[columnAccessor] ?? '').toLowerCase();
-            if (left < right) return direction === 'asc' ? -1 : 1;
-            if (left > right) return direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-        return sorted;
-    }, [filteredRecords, sortStatus]);
-
-    const paginatedRecords = useMemo(() => {
-        const start = (page - 1) * pageSize;
-        return sortedRecords.slice(start, start + pageSize);
-    }, [sortedRecords, page, pageSize]);
+    }, [pageSize]);
 
     const handleDelete = async (id: number) => {
         if (!canDelete) {
@@ -217,17 +220,20 @@ const ComponentsAppsCustomerList = () => {
                 <div className="datatables pagination-padding">
                     <DataTable
                         className="table-hover whitespace-nowrap"
-                        records={paginatedRecords}
+                        records={records}
                         columns={columns}
                         highlightOnHover
-                        totalRecords={sortedRecords.length}
+                        totalRecords={totalRecords}
                         recordsPerPage={pageSize}
                         page={page}
                         onPageChange={(p) => setPage(p)}
                         recordsPerPageOptions={PAGE_SIZES}
                         onRecordsPerPageChange={setPageSize}
                         sortStatus={sortStatus}
-                        onSortStatusChange={setSortStatus}
+                        onSortStatusChange={(next) => {
+                            setSortStatus(next);
+                            setPage(1);
+                        }}
                         paginationText={({ from, to, totalRecords }) => `Showing ${from} to ${to} of ${totalRecords} entries`}
                     />
                 </div>

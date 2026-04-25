@@ -2,7 +2,6 @@
 import IconEdit from '@/components/icon/icon-edit';
 import IconPlus from '@/components/icon/icon-plus';
 import IconX from '@/components/icon/icon-x';
-import { orderBy, sortBy } from 'lodash';
 import type { DataTableColumn, DataTableProps, DataTableSortStatus } from 'mantine-datatable';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -40,17 +39,17 @@ const ComponentsAppsPurchaseList = () => {
     const [organisationsList, setOrganisationsList] = useState<any[]>([]);
     const [orgsLoading, setOrgsLoading] = useState<boolean>(false);
     const [organisationId, setOrganisationId] = useState<string>('');
-    const [items, setItems] = useState<PurchaseVoucherRecord[]>([]);
+    const [records, setRecords] = useState<PurchaseVoucherRecord[]>([]);
+    const [totalRecords, setTotalRecords] = useState(0);
     const [loading, setLoading] = useState<boolean>(false);
 
     const [page, setPage] = useState(1);
     const PAGE_SIZES = [10, 20, 30, 50, 100];
     const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
-    const [initialRecords, setInitialRecords] = useState<PurchaseVoucherRecord[]>([]);
-    const [records, setRecords] = useState<PurchaseVoucherRecord[]>([]);
     const [selectedRecords, setSelectedRecords] = useState<PurchaseVoucherRecord[]>([]);
 
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
         columnAccessor: 'id',
         direction: 'desc',
@@ -133,69 +132,53 @@ const ComponentsAppsPurchaseList = () => {
     });
 
     useEffect(() => {
-        setPage(1);
-    }, [pageSize, organisationId]);
-
-    useEffect(() => {
-        const from = (page - 1) * pageSize;
-        const to = from + pageSize;
-        setRecords([...initialRecords.slice(from, to)]);
-    }, [page, pageSize, initialRecords]);
-
-    useEffect(() => {
-        const fetchVouchers = async () => {
-            if (!organisationId) {
-                setItems([]);
-                setInitialRecords([]);
-                setRecords([]);
-                return;
-            }
-            setLoading(true);
-            try {
-                const skip = (page - 1) * pageSize;
-                const data = await apiGet<any>(
-                    `purchase-vouchers?skip=${skip}&limit=${pageSize}&organisation_id=${Number(organisationId)}&include_cancelled=true`
-                );
-                const normalized: PurchaseVoucherRecord[] = (Array.isArray(data) ? data : []).map((row: any) => ({
-                    id: row.id,
-                    voucherNo: row.voucher_no,
-                    supplierName: row.supplier_name || '-',
-                    date: row.voucher_date ? new Date(row.voucher_date).toLocaleDateString() : '-',
-                    amount: Number(row.total_amount || 0).toFixed(2),
-                    status: row.status || 'active',
-                }));
-                const ordered = orderBy(normalized, ['id'], ['desc']);
-                setItems(ordered);
-                setInitialRecords(ordered);
-            } catch (error: any) {
-                console.error('Failed to load purchase vouchers', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchVouchers();
-    }, [page, pageSize, organisationId]);
-
-    useEffect(() => {
-        setInitialRecords(() => {
-            return items.filter((item) => {
-                return (
-                    String(item.id).includes(search) ||
-                    String(item.voucherNo).toLowerCase().includes(search.toLowerCase()) ||
-                    item.supplierName.toLowerCase().includes(search.toLowerCase()) ||
-                    item.date.toLowerCase().includes(search.toLowerCase()) ||
-                    item.amount.toLowerCase().includes(search.toLowerCase()) ||
-                    item.status.toLowerCase().includes(search.toLowerCase())
-                );
-            });
-        });
+        const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => window.clearTimeout(handle);
     }, [search]);
 
     useEffect(() => {
-        const data2 = sortBy(initialRecords, sortStatus.columnAccessor);
-        setRecords(sortStatus.direction === 'desc' ? data2.reverse() : data2);
         setPage(1);
-    }, [sortStatus]);
+    }, [pageSize, organisationId, debouncedSearch]);
+
+    const fetchVouchers = useCallback(async () => {
+        if (!organisationId) {
+            setRecords([]);
+            setTotalRecords(0);
+            return;
+        }
+        setLoading(true);
+        try {
+            const params = new URLSearchParams({
+                skip: String((page - 1) * pageSize),
+                limit: String(pageSize),
+                organisation_id: String(Number(organisationId)),
+                include_cancelled: 'true',
+            });
+            if (debouncedSearch) {
+                params.set('search', debouncedSearch);
+            }
+            const data = await apiGet<{ total?: number; items?: any[] }>(`purchase-vouchers?${params.toString()}`);
+            const rawItems = Array.isArray(data) ? data : data.items ?? [];
+            const normalized: PurchaseVoucherRecord[] = rawItems.map((row: any) => ({
+                id: row.id,
+                voucherNo: row.voucher_no,
+                supplierName: row.supplier_name || '-',
+                date: row.voucher_date ? new Date(row.voucher_date).toLocaleDateString() : '-',
+                amount: Number(row.total_amount || 0).toFixed(2),
+                status: row.status || 'active',
+            }));
+            setRecords(normalized);
+            setTotalRecords(Array.isArray(data) ? normalized.length : data.total ?? normalized.length);
+        } catch (error: any) {
+            console.error('Failed to load purchase vouchers', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [page, pageSize, organisationId, debouncedSearch]);
+
+    useEffect(() => {
+        void fetchVouchers();
+    }, [fetchVouchers]);
 
     const selectedOrganisation = organisationsList.find((org: any) => String(org.id) === String(organisationId));
     const selectedOrganisationLabel = selectedOrganisation?.name || (organisationId ? `Organisation #${organisationId}` : 'Selected Organisation');
@@ -204,18 +187,15 @@ const ComponentsAppsPurchaseList = () => {
         if (!window.confirm('Are you sure you want to cancel the selected voucher(s)? Cancelled vouchers cannot be edited.')) {
             return;
         }
-        const candidates = id ? items.filter((r) => r.id === id) : selectedRecords || [];
+        const candidates = id ? records.filter((r) => r.id === id) : selectedRecords || [];
         const ids = candidates.filter((r) => r.status !== 'cancelled').map((d) => d.id);
         if (!ids.length) {
             return;
         }
         try {
             await Promise.all(ids.map((rowId: number) => apiPost(`purchase-vouchers/${rowId}/cancel`)));
-            const updated = items.map((row) => (ids.includes(row.id) ? { ...row, status: 'cancelled' } : row));
-            setItems(updated);
-            setInitialRecords(updated);
-            setRecords(updated);
             setSelectedRecords([]);
+            await fetchVouchers();
         } catch (error: any) {
             window.alert(error?.message || 'Failed to cancel voucher.');
         }
@@ -354,7 +334,7 @@ const ComponentsAppsPurchaseList = () => {
                             },
                         ]}
                         highlightOnHover
-                        totalRecords={initialRecords.length}
+                        totalRecords={totalRecords}
                         recordsPerPage={pageSize}
                         page={page}
                         onPageChange={(p) => setPage(p)}

@@ -4,7 +4,7 @@ Service for purchase voucher operations.
 from decimal import Decimal
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, cast, String
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from app.models.purchase_voucher import PurchaseVoucher, PurchaseVoucherItem
@@ -105,14 +105,36 @@ async def list_purchase_vouchers(
     limit: int = 100,
     organisation_id: Optional[int] = None,
     include_cancelled: bool = False,
-) -> List[PurchaseVoucher]:
-    query = select(PurchaseVoucher).order_by(PurchaseVoucher.id.desc())
+    search: Optional[str] = None,
+) -> tuple[int, List[PurchaseVoucher]]:
+    query = select(PurchaseVoucher)
+    count_query = select(func.count(PurchaseVoucher.id))
+
     if organisation_id is not None:
         query = query.where(PurchaseVoucher.organisation_id == organisation_id)
+        count_query = count_query.where(PurchaseVoucher.organisation_id == organisation_id)
     if not include_cancelled:
         query = query.where(PurchaseVoucher.status == PURCHASE_VOUCHER_STATUS_ACTIVE)
-    result = await db.execute(query.offset(skip).limit(limit))
-    return result.scalars().all()
+        count_query = count_query.where(PurchaseVoucher.status == PURCHASE_VOUCHER_STATUS_ACTIVE)
+
+    term = (search or "").strip()
+    if term:
+        pattern = f"%{term}%"
+        search_clause = or_(
+            PurchaseVoucher.supplier_name.ilike(pattern),
+            cast(PurchaseVoucher.voucher_no, String).ilike(pattern),
+            cast(PurchaseVoucher.id, String).ilike(pattern),
+        )
+        query = query.where(search_clause)
+        count_query = count_query.where(search_clause)
+
+    query = query.order_by(PurchaseVoucher.id.desc()).offset(skip).limit(limit)
+
+    total_result = await db.execute(count_query)
+    total = int(total_result.scalar_one() or 0)
+
+    result = await db.execute(query)
+    return total, result.scalars().all()
 
 
 async def get_next_voucher_number(db: AsyncSession, organisation_id: Optional[int] = None) -> int:

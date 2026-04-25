@@ -4,6 +4,7 @@
 export type { CustomerRecord, CustomerWritePayload } from './customerApi';
 export {
     listCustomers,
+    listCustomersPaged,
     fetchCustomer,
     createCustomer,
     updateCustomer,

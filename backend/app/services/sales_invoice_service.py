@@ -4,7 +4,7 @@ Service for sales invoice operations.
 from decimal import Decimal
 from typing import List, Optional
 from datetime import date
-from sqlalchemy import select, func, cast, Integer, case
+from sqlalchemy import select, func, cast, Integer, case, or_, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
@@ -201,6 +201,7 @@ async def list_sales_invoices(
     invoice_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    search: Optional[str] = None,
 ) -> tuple[int, List[SalesInvoice]]:
     query = select(SalesInvoice)
     count_query = select(func.count(SalesInvoice.id))
@@ -220,6 +221,17 @@ async def list_sales_invoices(
     if end_date:
         query = query.where(SalesInvoice.invoice_date <= end_date)
         count_query = count_query.where(SalesInvoice.invoice_date <= end_date)
+
+    term = (search or "").strip()
+    if term:
+        pattern = f"%{term}%"
+        search_clause = or_(
+            SalesInvoice.invoice_number.ilike(pattern),
+            SalesInvoice.customer_name.ilike(pattern),
+            cast(SalesInvoice.id, String).ilike(pattern),
+        )
+        query = query.where(search_clause)
+        count_query = count_query.where(search_clause)
 
     query = query.order_by(SalesInvoice.created_at.desc()).offset(skip).limit(limit)
 
