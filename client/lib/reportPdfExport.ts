@@ -40,3 +40,24 @@ export function waitNextPaint(): Promise<void> {
         });
     });
 }
+
+/**
+ * Mobile report tables use a narrow horizontal scroll viewport (~two columns visible).
+ * html2canvas captures the layout box, so PDFs would omit off-screen columns unless
+ * we expand these regions in the cloned DOM. Mark scroll wrappers with
+ * `data-report-table-scroll`.
+ */
+export function expandReportTableScrollRegionsForPdf(root: HTMLElement): void {
+    root.querySelectorAll('[data-report-table-scroll]').forEach((node) => {
+        if (node instanceof HTMLElement) {
+            node.style.maxWidth = 'none';
+            node.style.width = 'auto';
+            node.style.overflow = 'visible';
+        }
+        node.querySelectorAll('table').forEach((t) => {
+            if (t instanceof HTMLElement) {
+                t.style.width = 'max-content';
+            }
+        });
+    });
+}

@@ -13,7 +13,7 @@ import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv, type CsvColumn } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
-import { fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
+import { expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchPurchaseReport, PurchaseReportItem, PurchaseReportSummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -214,6 +214,7 @@ const PurchaseReport = () => {
                 onclone: (_doc, clonedEl) => {
                     clonedEl.style.backgroundColor = '#ffffff';
                     clonedEl.style.overflow = 'visible';
+                    expandReportTableScrollRegionsForPdf(clonedEl);
 
                     clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
                     if (node instanceof HTMLElement) {
@@ -281,15 +282,50 @@ const PurchaseReport = () => {
         }
     };
 
-    const downloadExcel = () => {
+    const downloadExcel = async () => {
+        if (!organisationId) {
+            return;
+        }
+        const applySearch = (items: PurchaseReportItem[]) => {
+            if (!search.trim()) {
+                return items;
+            }
+            const term = search.toLowerCase();
+            return items.filter(
+                (item) =>
+                    String(item.purchase_invoice_number || '').toLowerCase().includes(term) ||
+                    item.supplier_name?.toLowerCase().includes(term)
+            );
+        };
         const columns: CsvColumn<PurchaseReportItem>[] = [
-            { key: 'purchase_date', label: 'Purchase Date' },
+            {
+                key: 'purchase_date',
+                label: 'Purchase Date',
+                format: (v) => (v ? new Date(String(v)).toLocaleDateString() : ''),
+            },
             { key: 'purchase_invoice_number', label: 'Invoice Number' },
             { key: 'supplier_name', label: 'Supplier Name' },
             { key: 'subtotal', label: 'Subtotal' },
             { key: 'invoice_total', label: 'Invoice Total' },
         ];
-        exportToCsv(`purchase-report-${organisationId || 'org'}.csv`, records, columns);
+        try {
+            const allRows = await fetchAllPaginatedReportItems(async (skip, limit) => {
+                const response = await fetchPurchaseReport({
+                    organisation_id: Number(organisationId),
+                    from_date: startDate,
+                    to_date: endDate,
+                    invoice_type: invoiceTypeFilter,
+                    supplier: supplierFilter,
+                    skip,
+                    limit,
+                });
+                return { items: response.items || [], total: response.total || 0 };
+            });
+            exportToCsv(`purchase-report-${organisationId || 'org'}.csv`, applySearch(allRows), columns);
+        } catch (e) {
+            console.error('Failed to export purchase report CSV', e);
+            window.alert('Failed to export Excel. Please try again.');
+        }
     };
 
     if (!canViewReports) {
@@ -375,7 +411,12 @@ const PurchaseReport = () => {
                 </div>
 
                 <div className="purchase-datatable-wrap datatables pagination-padding px-5 pb-5">
-                    <DataTable
+                    <div
+                        data-report-table-scroll
+                        className="min-w-0 w-full max-md:mx-auto max-md:max-w-[280px] max-md:overflow-x-auto max-md:overscroll-x-contain max-md:touch-pan-x"
+                    >
+                        <div className="w-full min-w-max md:min-w-0">
+                            <DataTable
                         className="table-hover whitespace-nowrap"
                         withBorder
                         withColumnBorders
@@ -420,6 +461,8 @@ const PurchaseReport = () => {
                         sortStatus={sortStatus}
                         onSortStatusChange={setSortStatus}
                     />
+                        </div>
+                    </div>
                     {loading && <div className="px-5 py-3 text-sm text-gray-500">Loading purchase report...</div>}
                 </div>
             </div>

@@ -13,7 +13,7 @@ import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
-import { fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
+import { expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchSalesReport, SalesReportItem, SalesReportSummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -275,6 +275,7 @@ const SalesReport = () => {
                 clonedEl.style.border = '2px solid #1e293b';
                 clonedEl.style.borderRadius = '8px';
                 clonedEl.style.overflow = 'visible';
+                expandReportTableScrollRegionsForPdf(clonedEl);
 
                 const reportHeader = clonedEl.querySelector('header');
                 if (reportHeader instanceof HTMLElement) {
@@ -401,7 +402,21 @@ const SalesReport = () => {
         }
     };
 
-    const downloadExcel = () => {
+    const downloadExcel = async () => {
+        if (!organisationId) {
+            return;
+        }
+        const applySearch = (items: SalesReportItem[]) => {
+            if (!search.trim()) {
+                return items;
+            }
+            const term = search.toLowerCase();
+            return items.filter(
+                (item) =>
+                    item.invoice_number?.toLowerCase().includes(term) ||
+                    item.customer_name?.toLowerCase().includes(term)
+            );
+        };
         const preamble = [
             `Organisation: ${selectedOrganisationLabel}`,
             'Report: Sales Report',
@@ -409,35 +424,47 @@ const SalesReport = () => {
             ...(filterSummaryLine ? [filterSummaryLine] : []),
             '',
         ];
-        exportToCsv(
-            `sales-report-${organisationId || 'org'}.csv`,
-            records,
-            [
-                {
-                    key: 'invoice_date',
-                    label: 'Invoice Date',
-                    format: (v) => {
-                        if (v == null || v === '') {
-                            return '';
-                        }
-                        const s = String(v);
-                        const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
-                        if (m) {
-                            return formatReportDate(m[1]);
-                        }
-                        return new Date(s).toLocaleDateString();
-                    },
+        const columns = [
+            {
+                key: 'invoice_date' as const,
+                label: 'Invoice Date',
+                format: (v: SalesReportItem['invoice_date']) => {
+                    if (v == null || v === '') {
+                        return '';
+                    }
+                    const s = String(v);
+                    const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+                    if (m) {
+                        return formatReportDate(m[1]);
+                    }
+                    return new Date(s).toLocaleDateString();
                 },
-                { key: 'invoice_number', label: 'Invoice Number' },
-                { key: 'invoice_type', label: 'Invoice Type' },
-                { key: 'subtotal', label: 'Subtotal' },
-                { key: 'tax_amount', label: 'Tax Amount' },
-                { key: 'round_off', label: 'Round Off' },
-                { key: 'invoice_total', label: 'Invoice Total' },
-                { key: 'customer_name', label: 'Customer Name' },
-            ],
-            preamble
-        );
+            },
+            { key: 'invoice_number' as const, label: 'Invoice Number' },
+            { key: 'invoice_type' as const, label: 'Invoice Type' },
+            { key: 'subtotal' as const, label: 'Subtotal' },
+            { key: 'tax_amount' as const, label: 'Tax Amount' },
+            { key: 'invoice_total' as const, label: 'Invoice Total' },
+            { key: 'customer_name' as const, label: 'Customer Name' },
+        ];
+        try {
+            const allRows = await fetchAllPaginatedReportItems(async (skip, limit) => {
+                const response = await fetchSalesReport({
+                    organisation_id: Number(organisationId),
+                    from_date: startDate,
+                    to_date: endDate,
+                    invoice_type: invoiceTypeFilter,
+                    status: statusFilter,
+                    skip,
+                    limit,
+                });
+                return { items: response.items || [], total: response.total || 0 };
+            });
+            exportToCsv(`sales-report-${organisationId || 'org'}.csv`, applySearch(allRows), columns, preamble);
+        } catch (e) {
+            console.error('Failed to export sales report CSV', e);
+            window.alert('Failed to export Excel. Please try again.');
+        }
     };
 
     if (!canViewReports) {
@@ -529,7 +556,12 @@ const SalesReport = () => {
                 </div>
 
                 <div className="sales-report-datatable-wrap datatables min-w-0 bg-white px-6 pb-6">
-                    <DataTable
+                    <div
+                        data-report-table-scroll
+                        className="min-w-0 w-full max-md:mx-auto max-md:max-w-[280px] max-md:overflow-x-auto max-md:overscroll-x-contain max-md:touch-pan-x"
+                    >
+                        <div className="w-full min-w-max md:min-w-0">
+                            <DataTable
                         className="table-hover"
                         horizontalSpacing="sm"
                         verticalSpacing="md"
@@ -558,7 +590,13 @@ const SalesReport = () => {
                             },
                             { accessor: 'invoice_number', title: t('th_invoice_number'), sortable: true, width: 140, noWrap: true },
                             { accessor: 'invoice_type', title: t('th_type'), sortable: true, width: 96, noWrap: true },
-                            { accessor: 'customer_name', title: t('th_customer'), sortable: true, width: 200, noWrap: true },
+                            {
+                                accessor: 'customer_name',
+                                title: t('th_customer'),
+                                sortable: true,
+                                width: 200,
+                                render: ({ customer_name }) => <div className="max-w-[20ch] whitespace-normal break-words">{customer_name}</div>,
+                            },
                             {
                                 accessor: 'subtotal',
                                 title: t('th_subtotal'),
@@ -578,15 +616,6 @@ const SalesReport = () => {
                                 render: ({ tax_amount }) => <div className="text-right tabular-nums">{Number(tax_amount || 0).toFixed(2)}</div>,
                             },
                             {
-                                accessor: 'round_off',
-                                title: t('th_round_off'),
-                                sortable: true,
-                                width: 100,
-                                textAlignment: 'right',
-                                noWrap: true,
-                                render: ({ round_off }) => <div className="text-right tabular-nums">{Number(round_off || 0).toFixed(2)}</div>,
-                            },
-                            {
                                 accessor: 'invoice_total',
                                 title: t('th_invoice_total'),
                                 sortable: true,
@@ -602,6 +631,8 @@ const SalesReport = () => {
                         sortStatus={sortStatus}
                         onSortStatusChange={setSortStatus}
                     />
+                        </div>
+                    </div>
                     {loading && <div className="px-6 py-3 text-sm text-gray-500">Loading sales report...</div>}
                 </div>
             </div>

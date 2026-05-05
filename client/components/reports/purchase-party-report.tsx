@@ -13,7 +13,7 @@ import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
-import { fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
+import { expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchPurchasePartyReport, PurchasePartyReportItem, PurchasePartyReportSummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -196,6 +196,7 @@ const PurchasePartyReport = () => {
                 windowHeight: reportRef.current.scrollHeight,
                 onclone: (_doc, clonedEl) => {
                 clonedEl.style.backgroundColor = '#ffffff';
+                expandReportTableScrollRegionsForPdf(clonedEl);
 
                 clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
                     if (node instanceof HTMLElement) {
@@ -263,13 +264,34 @@ const PurchasePartyReport = () => {
         }
     };
 
-    const downloadExcel = () => {
-        exportToCsv(`purchase-party-report-${organisationId || 'org'}.csv`, records, [
-            { key: 'party_name', label: 'Party Name' },
-            { key: 'invoice_count', label: 'Invoice Count' },
-            { key: 'subtotal', label: 'Purchase Value' },
-            { key: 'invoice_total', label: 'Net Purchase' },
-        ]);
+    const downloadExcel = async () => {
+        if (!organisationId) {
+            return;
+        }
+        const columns = [
+            { key: 'party_name' as const, label: 'Party Name' },
+            { key: 'invoice_count' as const, label: 'Invoice Count' },
+            { key: 'subtotal' as const, label: 'Purchase Value' },
+            { key: 'invoice_total' as const, label: 'Net Purchase' },
+        ];
+        try {
+            const allRows = await fetchAllPaginatedReportItems(async (skip, limit) => {
+                const response = await fetchPurchasePartyReport({
+                    organisation_id: Number(organisationId),
+                    from_date: startDate,
+                    to_date: endDate,
+                    invoice_type: invoiceTypeFilter,
+                    party: partySearch,
+                    skip,
+                    limit,
+                });
+                return { items: response.items || [], total: response.total || 0 };
+            });
+            exportToCsv(`purchase-party-report-${organisationId || 'org'}.csv`, allRows, columns);
+        } catch (e) {
+            console.error('Failed to export purchase party report CSV', e);
+            window.alert('Failed to export Excel. Please try again.');
+        }
     };
 
     if (!canViewReports) {
@@ -360,7 +382,12 @@ const PurchasePartyReport = () => {
                 </div>
 
                 <div className="purchase-party-datatable-wrap datatables pagination-padding px-5 pb-5">
-                    <DataTable
+                    <div
+                        data-report-table-scroll
+                        className="min-w-0 w-full max-md:mx-auto max-md:max-w-[280px] max-md:overflow-x-auto max-md:overscroll-x-contain max-md:touch-pan-x"
+                    >
+                        <div className="w-full min-w-max md:min-w-0">
+                            <DataTable
                         className="table-hover whitespace-nowrap"
                         withBorder
                         withColumnBorders
@@ -410,6 +437,8 @@ const PurchasePartyReport = () => {
                         sortStatus={sortStatus}
                         onSortStatusChange={setSortStatus}
                     />
+                        </div>
+                    </div>
                     {loading && <div className="px-5 py-3 text-sm text-gray-500">Loading purchase party report...</div>}
                 </div>
             </div>

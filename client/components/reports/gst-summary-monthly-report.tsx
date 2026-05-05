@@ -12,6 +12,7 @@ import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv } from '@/lib/exportUtils';
 import { getCurrentMonthYearMonth } from '@/lib/reportDateRange';
+import { expandReportTableScrollRegionsForPdf } from '@/lib/reportPdfExport';
 import { fetchGstSummaryMonthlyReport, GstSummaryMonthlyItem, GstSummaryMonthlySummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -199,6 +200,7 @@ const GstSummaryMonthlyReport = () => {
             onclone: (_doc, clonedEl) => {
                 clonedEl.style.backgroundColor = '#ffffff';
                 clonedEl.style.overflow = 'visible';
+                expandReportTableScrollRegionsForPdf(clonedEl);
 
                 clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
                     if (node instanceof HTMLElement) {
@@ -348,7 +350,12 @@ const GstSummaryMonthlyReport = () => {
                 </div>
 
                 <div className="gst-monthly-datatable-wrap datatables pagination-padding px-5 pb-5">
-                    <DataTable
+                    <div
+                        data-report-table-scroll
+                        className="min-w-0 w-full max-md:mx-auto max-md:max-w-[280px] max-md:overflow-x-auto max-md:overscroll-x-contain max-md:touch-pan-x"
+                    >
+                        <div className="w-full min-w-max md:min-w-0">
+                            <DataTable
                         className="table-hover whitespace-nowrap"
                         withBorder
                         withColumnBorders
@@ -405,6 +412,8 @@ const GstSummaryMonthlyReport = () => {
                         sortStatus={sortStatus}
                         onSortStatusChange={setSortStatus}
                     />
+                        </div>
+                    </div>
                     {loading && <div className="px-5 py-3 text-sm text-gray-500">Loading GST monthly summary...</div>}
                 </div>
             </div>

@@ -13,7 +13,7 @@ import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
-import { fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
+import { expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchSalesPartyReport, SalesPartyReportItem, SalesPartyReportSummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -226,6 +226,7 @@ const SalesPartyReport = () => {
                 windowHeight: reportRef.current.scrollHeight,
                 onclone: (_doc, clonedEl) => {
                 clonedEl.style.backgroundColor = '#ffffff';
+                expandReportTableScrollRegionsForPdf(clonedEl);
 
                 clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
                     if (node instanceof HTMLElement) {
@@ -293,14 +294,36 @@ const SalesPartyReport = () => {
         }
     };
 
-    const downloadExcel = () => {
-        exportToCsv(`sales-party-report-${organisationId || 'org'}.csv`, records, [
-            { key: 'party_name', label: 'Party Name' },
-            { key: 'invoice_count', label: 'Invoice Count' },
-            { key: 'taxable_amount', label: 'Taxable Amount' },
-            { key: 'tax_amount', label: 'Tax Amount' },
-            { key: 'invoice_total', label: 'Invoice Total' },
-        ]);
+    const downloadExcel = async () => {
+        if (!organisationId) {
+            return;
+        }
+        const columns = [
+            { key: 'party_name' as const, label: 'Party Name' },
+            { key: 'invoice_count' as const, label: 'Invoice Count' },
+            { key: 'taxable_amount' as const, label: 'Taxable Amount' },
+            { key: 'tax_amount' as const, label: 'Tax Amount' },
+            { key: 'invoice_total' as const, label: 'Invoice Total' },
+        ];
+        try {
+            const allRows = await fetchAllPaginatedReportItems(async (skip, limit) => {
+                const response = await fetchSalesPartyReport({
+                    organisation_id: Number(organisationId),
+                    from_date: startDate,
+                    to_date: endDate,
+                    invoice_type: invoiceTypeFilter,
+                    status: statusFilter,
+                    party: partySearch,
+                    skip,
+                    limit,
+                });
+                return { items: response.items || [], total: response.total || 0 };
+            });
+            exportToCsv(`sales-party-report-${organisationId || 'org'}.csv`, allRows, columns);
+        } catch (e) {
+            console.error('Failed to export sales party report CSV', e);
+            window.alert('Failed to export Excel. Please try again.');
+        }
     };
 
     if (!canViewReports) {
@@ -397,7 +420,12 @@ const SalesPartyReport = () => {
                 </div>
 
                 <div className="sales-party-datatable-wrap datatables pagination-padding px-5 pb-5">
-                    <DataTable
+                    <div
+                        data-report-table-scroll
+                        className="min-w-0 w-full max-md:mx-auto max-md:max-w-[280px] max-md:overflow-x-auto max-md:overscroll-x-contain max-md:touch-pan-x"
+                    >
+                        <div className="w-full min-w-max md:min-w-0">
+                            <DataTable
                         className="table-hover whitespace-nowrap"
                         withBorder
                         withColumnBorders
@@ -457,6 +485,8 @@ const SalesPartyReport = () => {
                         sortStatus={sortStatus}
                         onSortStatusChange={setSortStatus}
                     />
+                        </div>
+                    </div>
                     {loading && <div className="px-5 py-3 text-base text-gray-500">Loading sales party report...</div>}
                 </div>
             </div>
