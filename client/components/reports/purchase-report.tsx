@@ -13,7 +13,7 @@ import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv, type CsvColumn } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
-import { expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
+import { chunkReportRows, expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchPurchaseReport, PurchaseReportItem, PurchaseReportSummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -202,18 +202,35 @@ const PurchaseReport = () => {
                 return { items: response.items || [], total: response.total || 0 };
             });
             const rowsForPdf = applySearch(allRows);
-            flushSync(() => setPdfExportRecords(rowsForPdf));
-            await waitNextPaint();
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const marginMm = 10;
+            const pageWidthMm = pdf.internal.pageSize.getWidth();
+            const pageHeightMm = pdf.internal.pageSize.getHeight();
+            const contentWidthMm = pageWidthMm - 2 * marginMm;
+            const contentHeightMm = pageHeightMm - 2 * marginMm;
 
-            const canvas = await html2canvas(reportRef.current, {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                windowWidth: reportRef.current.scrollWidth,
-                windowHeight: reportRef.current.scrollHeight,
-                onclone: (_doc, clonedEl) => {
+            const pdfRowChunks = chunkReportRows(rowsForPdf);
+            for (let chunkIndex = 0; chunkIndex < pdfRowChunks.length; chunkIndex += 1) {
+                const rowsChunk = pdfRowChunks[chunkIndex];
+                flushSync(() => setPdfExportRecords(rowsChunk));
+                await waitNextPaint();
+
+                const reportWidth = reportRef.current.scrollWidth;
+                const tableScrollWidth = reportRef.current.querySelector<HTMLElement>('[data-report-table-scroll]')?.scrollWidth ?? 0;
+                const pdfCaptureWidth = Math.max(reportWidth, tableScrollWidth);
+
+                const canvas = await html2canvas(reportRef.current, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    width: pdfCaptureWidth,
+                    windowWidth: pdfCaptureWidth,
+                    windowHeight: reportRef.current.scrollHeight,
+                    onclone: (_doc, clonedEl) => {
                     clonedEl.style.backgroundColor = '#ffffff';
                     clonedEl.style.overflow = 'visible';
+                    clonedEl.style.width = `${pdfCaptureWidth}px`;
+                    clonedEl.style.maxWidth = 'none';
                     expandReportTableScrollRegionsForPdf(clonedEl);
 
                     clonedEl.querySelectorAll('.mantine-ScrollArea-root').forEach((node) => {
@@ -253,25 +270,18 @@ const PurchaseReport = () => {
                 clonedEl.querySelectorAll('.purchase-report-pdf-hide').forEach((node) => {
                     (node as HTMLElement).style.display = 'none';
                 });
-                },
-            });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = pdfWidth;
-            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+                    },
+                });
+                const imgData = canvas.toDataURL('image/png');
+                const widthFitHeightMm = (canvas.width * contentHeightMm) / canvas.height;
+                const imgRenderWidth = Math.min(contentWidthMm, widthFitHeightMm);
+                const imgRenderHeight = (canvas.height * imgRenderWidth) / canvas.width;
+                const xMm = marginMm + (contentWidthMm - imgRenderWidth) / 2;
 
-            let heightLeft = imgHeight;
-            let position = 0;
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pdfHeight;
-
-            while (heightLeft > 0) {
-                position = heightLeft - imgHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pdfHeight;
+                if (chunkIndex > 0) {
+                    pdf.addPage();
+                }
+                pdf.addImage(imgData, 'PNG', xMm, marginMm, imgRenderWidth, imgRenderHeight);
             }
 
             pdf.save(`purchase-report-${organisationId || 'org'}.pdf`);

@@ -1,5 +1,6 @@
 /** Matches backend `reports` routes: `limit` max is 2000 (see `backend/app/api/reports.py`). */
 export const REPORT_PDF_FETCH_CHUNK = 2000;
+export const REPORT_PDF_ROWS_PER_PAGE = 20;
 
 export type PaginatedReportBatch<T> = {
     items: T[];
@@ -39,6 +40,18 @@ export function waitNextPaint(): Promise<void> {
             requestAnimationFrame(() => resolve());
         });
     });
+}
+
+export function chunkReportRows<T>(rows: T[], rowsPerPage = REPORT_PDF_ROWS_PER_PAGE): T[][] {
+    if (!rows.length) {
+        return [[]];
+    }
+
+    const chunks: T[][] = [];
+    for (let index = 0; index < rows.length; index += rowsPerPage) {
+        chunks.push(rows.slice(index, index + rowsPerPage));
+    }
+    return chunks;
 }
 
 /**

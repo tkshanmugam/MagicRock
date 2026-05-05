@@ -13,7 +13,7 @@ import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
 import { exportToCsv, type CsvColumn } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
-import { expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
+import { chunkReportRows, expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchSalesReport, SalesReportItem, SalesReportSummary } from '@/lib/reportApi';
 import { getTranslation } from '@/i18n';
 
@@ -261,28 +261,38 @@ const SalesReport = () => {
                 return { items: response.items || [], total: response.total || 0 };
             });
             const rowsForPdf = applySearch(allRows);
-            flushSync(() => setPdfExportRecords(rowsForPdf));
-            await waitNextPaint();
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const marginMm = 12;
+            const pageWidthMm = pdf.internal.pageSize.getWidth();
+            const pageHeightMm = pdf.internal.pageSize.getHeight();
+            const contentWidthMm = pageWidthMm - 2 * marginMm;
+            const contentHeightMm = pageHeightMm - 2 * marginMm;
 
-            const reportWidth = reportRef.current.scrollWidth;
-            const tableScrollWidth = reportRef.current.querySelector<HTMLElement>('[data-report-table-scroll]')?.scrollWidth ?? 0;
-            const pdfCaptureWidth = Math.max(reportWidth, tableScrollWidth);
+            const pdfRowChunks = chunkReportRows(rowsForPdf);
+            for (let chunkIndex = 0; chunkIndex < pdfRowChunks.length; chunkIndex += 1) {
+                const rowsChunk = pdfRowChunks[chunkIndex];
+                flushSync(() => setPdfExportRecords(rowsChunk));
+                await waitNextPaint();
 
-            const canvas = await html2canvas(reportRef.current, {
-                scale: 2.5,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                width: pdfCaptureWidth,
-                windowWidth: pdfCaptureWidth,
-                windowHeight: reportRef.current.scrollHeight,
-                onclone: (_doc, clonedEl) => {
-                clonedEl.style.backgroundColor = '#ffffff';
-                clonedEl.style.border = '2px solid #1e293b';
-                clonedEl.style.borderRadius = '8px';
-                clonedEl.style.overflow = 'visible';
-                clonedEl.style.width = `${pdfCaptureWidth}px`;
-                clonedEl.style.maxWidth = 'none';
-                expandReportTableScrollRegionsForPdf(clonedEl);
+                const reportWidth = reportRef.current.scrollWidth;
+                const tableScrollWidth = reportRef.current.querySelector<HTMLElement>('[data-report-table-scroll]')?.scrollWidth ?? 0;
+                const pdfCaptureWidth = Math.max(reportWidth, tableScrollWidth);
+
+                const canvas = await html2canvas(reportRef.current, {
+                    scale: 2.5,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    width: pdfCaptureWidth,
+                    windowWidth: pdfCaptureWidth,
+                    windowHeight: reportRef.current.scrollHeight,
+                    onclone: (_doc, clonedEl) => {
+                    clonedEl.style.backgroundColor = '#ffffff';
+                    clonedEl.style.border = '2px solid #1e293b';
+                    clonedEl.style.borderRadius = '8px';
+                    clonedEl.style.overflow = 'visible';
+                    clonedEl.style.width = `${pdfCaptureWidth}px`;
+                    clonedEl.style.maxWidth = 'none';
+                    expandReportTableScrollRegionsForPdf(clonedEl);
 
                 const reportHeader = clonedEl.querySelector('header');
                 if (reportHeader instanceof HTMLElement) {
@@ -377,28 +387,18 @@ const SalesReport = () => {
                         }
                     });
                 }
-            },
-            });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const marginMm = 12;
-            const pageWidthMm = pdf.internal.pageSize.getWidth();
-            const pageHeightMm = pdf.internal.pageSize.getHeight();
-            const contentWidthMm = pageWidthMm - 2 * marginMm;
-            const contentHeightMm = pageHeightMm - 2 * marginMm;
+                },
+                });
+                const imgData = canvas.toDataURL('image/png');
+                const widthFitHeightMm = (canvas.width * contentHeightMm) / canvas.height;
+                const imgRenderWidth = Math.min(contentWidthMm, widthFitHeightMm);
+                const imgRenderHeight = (canvas.height * imgRenderWidth) / canvas.width;
+                const xMm = marginMm + (contentWidthMm - imgRenderWidth) / 2;
 
-            const imgRenderWidth = contentWidthMm;
-            const imgRenderHeight = (canvas.height * contentWidthMm) / canvas.width;
-
-            let heightLeft = imgRenderHeight;
-            pdf.addImage(imgData, 'PNG', marginMm, marginMm, imgRenderWidth, imgRenderHeight);
-            heightLeft -= contentHeightMm;
-
-            while (heightLeft > 0) {
-                const y = marginMm + (heightLeft - imgRenderHeight);
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', marginMm, y, imgRenderWidth, imgRenderHeight);
-                heightLeft -= contentHeightMm;
+                if (chunkIndex > 0) {
+                    pdf.addPage();
+                }
+                pdf.addImage(imgData, 'PNG', xMm, marginMm, imgRenderWidth, imgRenderHeight);
             }
 
             pdf.save(`sales-report-${organisationId || 'org'}.pdf`);
