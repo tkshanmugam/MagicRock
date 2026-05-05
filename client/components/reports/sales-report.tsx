@@ -264,17 +264,24 @@ const SalesReport = () => {
             flushSync(() => setPdfExportRecords(rowsForPdf));
             await waitNextPaint();
 
+            const reportWidth = reportRef.current.scrollWidth;
+            const tableScrollWidth = reportRef.current.querySelector<HTMLElement>('[data-report-table-scroll]')?.scrollWidth ?? 0;
+            const pdfCaptureWidth = Math.max(reportWidth, tableScrollWidth);
+
             const canvas = await html2canvas(reportRef.current, {
                 scale: 2.5,
                 useCORS: true,
                 backgroundColor: '#ffffff',
-                windowWidth: reportRef.current.scrollWidth,
+                width: pdfCaptureWidth,
+                windowWidth: pdfCaptureWidth,
                 windowHeight: reportRef.current.scrollHeight,
                 onclone: (_doc, clonedEl) => {
                 clonedEl.style.backgroundColor = '#ffffff';
                 clonedEl.style.border = '2px solid #1e293b';
                 clonedEl.style.borderRadius = '8px';
                 clonedEl.style.overflow = 'visible';
+                clonedEl.style.width = `${pdfCaptureWidth}px`;
+                clonedEl.style.maxWidth = 'none';
                 expandReportTableScrollRegionsForPdf(clonedEl);
 
                 const reportHeader = clonedEl.querySelector('header');
