@@ -11,7 +11,7 @@ import { apiGet } from '@/lib/apiClient';
 import { authState } from '@/lib/authState';
 import { organizationContext } from '@/lib/organizationContext';
 import { useOrganizationSelection } from '@/lib/useOrganizationSelection';
-import { exportToCsv } from '@/lib/exportUtils';
+import { exportToCsv, type CsvColumn } from '@/lib/exportUtils';
 import { getCurrentMonthDateRange } from '@/lib/reportDateRange';
 import { expandReportTableScrollRegionsForPdf, fetchAllPaginatedReportItems, waitNextPaint } from '@/lib/reportPdfExport';
 import { fetchSalesReport, SalesReportItem, SalesReportSummary } from '@/lib/reportApi';
@@ -424,11 +424,11 @@ const SalesReport = () => {
             ...(filterSummaryLine ? [filterSummaryLine] : []),
             '',
         ];
-        const columns = [
+        const columns: CsvColumn<SalesReportItem>[] = [
             {
                 key: 'invoice_date' as const,
                 label: 'Invoice Date',
-                format: (v: SalesReportItem['invoice_date']) => {
+                format: (v) => {
                     if (v == null || v === '') {
                         return '';
                     }
